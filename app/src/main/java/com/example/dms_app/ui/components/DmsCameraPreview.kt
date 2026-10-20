@@ -21,7 +21,8 @@ import java.util.concurrent.Executors
 @Composable
 fun DmsCameraPreview(
     analyzer: DmsFaceAnalyzer,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isPreviewVisible: Boolean = true
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
@@ -76,6 +77,10 @@ fun DmsCameraPreview(
             }, ContextCompat.getMainExecutor(ctx))
 
             previewView
+        },
+        update = { view ->
+            // Mute preview rendering when display is turned off to save battery
+            view.alpha = if (isPreviewVisible) 1f else 0f
         },
         modifier = modifier.fillMaxSize()
     )

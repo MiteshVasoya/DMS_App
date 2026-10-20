@@ -32,6 +32,8 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.VideocamOff
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -143,12 +145,40 @@ private fun DmsDashboard(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // 1. Live Camera Preview
+        // 1. Live Camera Preview or Black Screen (to avoid distraction and battery drain)
         if (isMonitoring) {
             DmsCameraPreview(
                 analyzer = viewModel.faceAnalyzer,
+                isPreviewVisible = settings.isCameraPreviewVisible,
                 modifier = Modifier.fillMaxSize()
             )
+
+            // When camera display is turned off to save battery, show pure black with subtle text
+            if (!settings.isCameraPreviewVisible) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.VideocamOff,
+                            contentDescription = "Camera Display Off",
+                            tint = Color.White.copy(alpha = 0.35f),
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Text(
+                            text = "Display Off • Battery Saver",
+                            color = Color.White.copy(alpha = 0.45f),
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            }
         } else {
             Box(
                 modifier = Modifier
@@ -197,7 +227,9 @@ private fun DmsDashboard(
             isMonitoring = isMonitoring,
             isAudioEnabled = settings.isAudioEnabled,
             isVibrationEnabled = settings.isVibrationEnabled,
+            isCameraPreviewVisible = settings.isCameraPreviewVisible,
             onToggleMonitoring = { viewModel.toggleMonitoring() },
+            onToggleCameraPreview = { viewModel.toggleCameraPreview() },
             onToggleAudio = { viewModel.toggleAudio() },
             onToggleVibration = { viewModel.toggleVibration() },
             onOpenSettings = { showSettingsDialog = true },
@@ -210,7 +242,9 @@ private fun DmsDashboard(
         if (showSettingsDialog) {
             DmsSettingsDialog(
                 settings = settings,
+                isCameraPreviewVisible = settings.isCameraPreviewVisible,
                 onDismiss = { showSettingsDialog = false },
+                onToggleCameraPreview = { viewModel.toggleCameraPreview() },
                 onEyeSensitivityChanged = { viewModel.updateEyeSensitivity(it) },
                 onDrowsyThresholdsChanged = { warn, crit -> viewModel.updateDrowsyThresholds(warn, crit) }
             )
@@ -379,7 +413,9 @@ private fun BottomControlsBar(
     isMonitoring: Boolean,
     isAudioEnabled: Boolean,
     isVibrationEnabled: Boolean,
+    isCameraPreviewVisible: Boolean,
     onToggleMonitoring: () -> Unit,
+    onToggleCameraPreview: () -> Unit,
     onToggleAudio: () -> Unit,
     onToggleVibration: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -394,7 +430,7 @@ private fun BottomControlsBar(
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Start / Stop Main Toggle Button
             Button(
@@ -410,6 +446,20 @@ private fun BottomControlsBar(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(text = if (isMonitoring) "Pause" else "Start")
+            }
+
+            // Camera Display Toggle (Battery Saver)
+            FilledTonalIconButton(
+                onClick = onToggleCameraPreview,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = if (isCameraPreviewVisible) Color(0xFF1E88E5) else Color.DarkGray
+                )
+            ) {
+                Icon(
+                    imageVector = if (isCameraPreviewVisible) Icons.Default.Videocam else Icons.Default.VideocamOff,
+                    contentDescription = if (isCameraPreviewVisible) "Turn Off Camera View" else "Turn On Camera View",
+                    tint = Color.White
+                )
             }
 
             // Audio Toggle
@@ -458,7 +508,9 @@ private fun BottomControlsBar(
 @Composable
 private fun DmsSettingsDialog(
     settings: DmsSettings,
+    isCameraPreviewVisible: Boolean,
     onDismiss: () -> Unit,
+    onToggleCameraPreview: () -> Unit,
     onEyeSensitivityChanged: (Float) -> Unit,
     onDrowsyThresholdsChanged: (Long, Long) -> Unit
 ) {
@@ -467,9 +519,34 @@ private fun DmsSettingsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("DMS Sensitivity Settings") },
+        title = { Text("DMS Settings") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                // Battery saver switch
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = "Camera Display", fontWeight = FontWeight.Medium)
+                        Text(
+                            text = "Turn off video preview to save battery and reduce heat while still monitoring.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Button(
+                        onClick = onToggleCameraPreview,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isCameraPreviewVisible) Color(0xFF1E88E5) else Color.DarkGray
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(if (isCameraPreviewVisible) "On" else "Off")
+                    }
+                }
+
                 // Eye threshold slider
                 Column {
                     Text(

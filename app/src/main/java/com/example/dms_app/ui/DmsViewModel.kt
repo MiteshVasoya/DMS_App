@@ -69,6 +69,12 @@ class DmsViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun toggleCameraPreview() {
+        _settings.update { current ->
+            current.copy(isCameraPreviewVisible = !current.isCameraPreviewVisible)
+        }
+    }
+
     fun updateEyeSensitivity(threshold: Float) {
         _settings.update { current ->
             val updated = current.copy(eyeOpenThreshold = threshold)
