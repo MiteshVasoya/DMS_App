@@ -2,6 +2,9 @@ package com.example.dms_app.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColor
@@ -26,6 +29,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Pause
@@ -70,6 +74,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.dms_app.model.AlertLevel
 import com.example.dms_app.model.AlertnessState
 import com.example.dms_app.model.DmsSettings
+import com.example.dms_app.service.DmsForegroundService
 import com.example.dms_app.ui.components.DmsCameraPreview
 import java.util.Locale
 
@@ -115,10 +120,29 @@ private fun DmsDashboard(
     viewModel: DmsViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val alertnessState by viewModel.alertnessState.collectAsState()
     val isMonitoring by viewModel.isMonitoring.collectAsState()
     val settings by viewModel.settings.collectAsState()
     var showSettingsDialog by remember { mutableStateOf(false) }
+
+    fun launchBackgroundBubble() {
+        if (!Settings.canDrawOverlays(context)) {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:${context.packageName}")
+            )
+            context.startActivity(intent)
+        } else {
+            DmsForegroundService.start(context)
+            // Move app to home screen so Google Maps or launcher is displayed with bubble
+            val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_HOME)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(homeIntent)
+        }
+    }
 
     // Pulsing color transition for warning and critical alarms
     val infiniteTransition = rememberInfiniteTransition(label = "AlertPulse")
@@ -230,6 +254,7 @@ private fun DmsDashboard(
             isCameraPreviewVisible = settings.isCameraPreviewVisible,
             onToggleMonitoring = { viewModel.toggleMonitoring() },
             onToggleCameraPreview = { viewModel.toggleCameraPreview() },
+            onLaunchFloatingBubble = { launchBackgroundBubble() },
             onToggleAudio = { viewModel.toggleAudio() },
             onToggleVibration = { viewModel.toggleVibration() },
             onOpenSettings = { showSettingsDialog = true },
@@ -416,6 +441,7 @@ private fun BottomControlsBar(
     isCameraPreviewVisible: Boolean,
     onToggleMonitoring: () -> Unit,
     onToggleCameraPreview: () -> Unit,
+    onLaunchFloatingBubble: () -> Unit,
     onToggleAudio: () -> Unit,
     onToggleVibration: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -425,12 +451,12 @@ private fun BottomControlsBar(
         color = Color.Black.copy(alpha = 0.75f),
         shape = RoundedCornerShape(28.dp),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
-        modifier = modifier.padding(horizontal = 20.dp)
+        modifier = modifier.padding(horizontal = 16.dp)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // Start / Stop Main Toggle Button
             Button(
@@ -446,6 +472,20 @@ private fun BottomControlsBar(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(text = if (isMonitoring) "Pause" else "Start")
+            }
+
+            // Floating Bubble Mode (Background Overlay over Maps)
+            FilledTonalIconButton(
+                onClick = onLaunchFloatingBubble,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = Color(0xFF6A1B9A)
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                    contentDescription = "Run in Background Floating Bubble",
+                    tint = Color.White
+                )
             }
 
             // Camera Display Toggle (Battery Saver)

@@ -4,7 +4,7 @@
   <img src="https://img.shields.io/badge/Platform-Android-3DDC84?style=flat-square&logo=android&logoColor=white" alt="Platform: Android" />
   <img src="https://img.shields.io/badge/Kotlin-2.2.10-7F52FF?style=flat-square&logo=kotlin&logoColor=white" alt="Kotlin 2.2.10" />
   <img src="https://img.shields.io/badge/Compose-Material_3-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white" alt="Jetpack Compose" />
-  <img src="https://img.shields.io/badge/ML_Kit-Face_Detection-FBBC04?style=flat-square&logo=google&logoColor=black" alt="Google ML Kit" />
+  <img src="https://img.shields.io/badge/ML_Kit-Face_Detection-4285F4?style=flat-square&logo=google&logoColor=white" alt="Google ML Kit" />
   <img src="https://img.shields.io/badge/Min_SDK-33_(Android_13)-brightgreen?style=flat-square" alt="Min SDK: 33" />
   <img src="https://img.shields.io/badge/Target_SDK-37-blue?style=flat-square" alt="Target SDK: 37" />
   <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square" alt="License: Apache 2.0" />
@@ -19,6 +19,7 @@ An intelligent, on-device **Driver Monitoring System (DMS)** Android application
 - **🔒 100% On-Device & Private**: All computer vision inferences run locally using bundled ML Kit models. No camera frames or telemetry are recorded, stored, or transmitted.
 - **⚡ Zero-Latency Pipeline**: Real-time eye-openness and 3D head-pose telemetry processed frame-by-frame via CameraX `ImageAnalysis`.
 - **🚨 Multi-Modal Alerting**: Immediate audible alarm beeps (`ToneGenerator STREAM_ALARM`), hardware haptics (`VibratorManager`), and visual flashing overlays.
+- **💬 Universal Floating Bubble Overlay**: Runs as an Android Foreground Service with a draggable, floating status badge over any app (navigation, music players, phone launcher, etc.) so driver monitoring remains uninterrupted during multitasking.
 - **🔋 OLED Battery Saver Mode**: Shuts off the live camera preview to reduce device thermals and battery consumption while keeping alertness tracking fully active.
 
 ---
@@ -35,6 +36,13 @@ Monitors the driver's head orientation across 3D Euler angles:
 - **Yaw (Left / Right)**: Triggers distraction alerts when looking away from the road (> 28°).
 - **Pitch (Up / Down)**: Triggers alerts when tilting downward toward a phone or lap (> 22°).
 - **Face Absence**: Triggers an alert when the driver's face leaves the camera frame for an extended period (> 1.5s).
+
+### 💬 Background Floating Bubble (System-Wide Overlay)
+Drivers can multitask or use any other app (navigation, audio players, messaging, or launcher) while DMS continuously monitors alertness in the background:
+- **Foreground Service**: Binds CameraX and ML Kit processing inside `DmsForegroundService` using `FOREGROUND_SERVICE_TYPE_CAMERA` so Android does not kill the camera stream.
+- **System-Wide Draggable Bubble**: Uses Android's `SYSTEM_ALERT_WINDOW` to float on top of any active app with live eye openness readouts (`L:95% • R:95%`) and a color-coded status dot (🟢 Normal, 🟡 Warning, 🔴 Alert).
+- **Persistent Alarm Overlays**: If drowsiness or distraction occurs, the floating bubble pulses with rapid emergency animations while alarms and haptic feedback sound over current device audio.
+- **One-Tap Return**: Tapping the bubble instantly returns to the full-screen dashboard.
 
 ### 📊 Driver Telemetry HUD
 - Real-time gauge metrics for **Left Eye Open %** and **Right Eye Open %**.
@@ -98,8 +106,12 @@ DMS_App
 │   │   │   │   ├── audio/              # AlertManager (ToneGenerator & Vibrator)
 │   │   │   │   ├── detection/          # DmsFaceAnalyzer (ML Kit CameraX Analyzer)
 │   │   │   │   ├── model/              # AlertnessState & DmsSettings data models
+│   │   │   │   ├── overlay/            # DmsOverlayManager (Floating bubble WindowManager)
+│   │   │   │   ├── service/            # DmsForegroundService (Background camera lifecycle)
 │   │   │   │   └── ui/                 # DmsScreen (Compose UI) & DmsViewModel
 │   │   │   └── res/
+│   │   │       ├── layout/             # layout_dms_overlay_bubble.xml (Bubble UI)
+│   │   │       └── drawable/           # Bubble shape and status icons
 │   │   ├── androidTest/
 │   │   └── test/                       # Local JVM Unit Tests
 │   └── build.gradle.kts
@@ -164,7 +176,7 @@ The compiled APK will be located at `app/build/outputs/apk/debug/app-debug.apk`.
 
 ## 🗺️ Roadmap & Upcoming Features
 
-- [ ] **Background & Navigation Overlay Mode**: Run DMS as a Foreground Service with a floating PiP / overlay window to allow simultaneous navigation with Google Maps / Waze.
+- [x] **Background & System-Wide Overlay Mode**: Run DMS as a Foreground Service with a draggable floating bubble over other apps like Google Maps or Waze.
 - [ ] **Mouth Opening Ratio (MAR) Yawn Detection**: Detect yawning to capture fatigue before microsleeps occur.
 - [ ] **Low-Light Exposure Compensation**: Adaptive sensor exposure for dark cabin driving conditions.
 - [ ] **Session Analytics & Safety Score**: Local trip metrics logging alert frequencies and attentiveness duration.

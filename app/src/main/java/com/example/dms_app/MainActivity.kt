@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import com.example.dms_app.service.DmsForegroundService
 import com.example.dms_app.ui.DmsScreen
 import com.example.dms_app.ui.theme.DMS_AppTheme
 
@@ -29,5 +30,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // If returning from background bubble, stop background service and let full app take over
+        DmsForegroundService.stop(this)
     }
 }
