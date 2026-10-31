@@ -3,7 +3,6 @@ package com.example.dms_app.audio
 import android.content.Context
 import android.media.AudioManager
 import android.media.ToneGenerator
-import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -30,13 +29,8 @@ class AlertManager(private val context: Context) {
     private var toneGenerator: ToneGenerator? = null
 
     private val vibrator: Vibrator? by lazy {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-            vibratorManager?.defaultVibrator
-        } else {
-            @Suppress("DEPRECATION")
-            context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-        }
+        val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+        vibratorManager?.defaultVibrator
     }
 
     init {
@@ -101,14 +95,9 @@ class AlertManager(private val context: Context) {
 
     private fun vibrate(critical: Boolean, durationMs: Long) {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val amplitude = if (critical) 255 else 160
-                val effect = VibrationEffect.createOneShot(durationMs, amplitude)
-                vibrator?.vibrate(effect)
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator?.vibrate(durationMs)
-            }
+            val amplitude = if (critical) 255 else 160
+            val effect = VibrationEffect.createOneShot(durationMs, amplitude)
+            vibrator?.vibrate(effect)
         } catch (_: Exception) {
         }
     }
