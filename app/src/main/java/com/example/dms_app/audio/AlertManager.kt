@@ -25,8 +25,18 @@ open class AlertManager(private val context: Context?) {
     private var currentLevel: AlertLevel = AlertLevel.NORMAL
     val currentAlertLevel: AlertLevel
         get() = currentLevel
-    private var isAudioEnabled: Boolean = true
-    private var isVibrationEnabled: Boolean = true
+
+    /**
+     * Indicates whether audio tone alarms are enabled.
+     */
+    var isAudioEnabled: Boolean = true
+        private set
+
+    /**
+     * Indicates whether haptic vibration alarms are enabled.
+     */
+    var isVibrationEnabled: Boolean = true
+        private set
     var alarmVolume: Int = 100
         private set
     var alertToneType: Int = 0
