@@ -2,22 +2,36 @@ package com.example.dms_app.ui
 
 import android.content.Context
 import com.example.dms_app.audio.AlertManager
+import com.example.dms_app.data.DmsSettingsRepository
 import com.example.dms_app.model.AlertLevel
 import com.example.dms_app.model.AlertnessState
 import com.example.dms_app.model.DmsSettings
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 
 /**
  * Unit tests verifying [DmsViewModel] business logic, state mutations,
- * and audio/vibration coordinator interactions without Android runtime dependencies.
+ * settings persistence repository integration, and audio/vibration coordinator interactions.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class DmsViewModelTest {
 
+    private val testDispatcher = StandardTestDispatcher()
     private lateinit var fakeAlertManager: FakeAlertManager
+    private lateinit var fakeRepository: FakeSettingsRepository
     private lateinit var viewModel: DmsViewModel
 
     /**
@@ -48,12 +62,42 @@ class DmsViewModelTest {
     }
 
     /**
+     * Fake test double for [DmsSettingsRepository] allowing in-memory verification of persistence operations.
+     */
+    private class FakeSettingsRepository : DmsSettingsRepository {
+        private val _flow = MutableStateFlow(DmsSettings())
+        override val settingsFlow: Flow<DmsSettings> = _flow.asStateFlow()
+
+        /**
+         * Updates in-memory settings using the transform lambda.
+         *
+         * @param transform Transform lambda applied to current [DmsSettings].
+         */
+        override suspend fun updateSettings(transform: (DmsSettings) -> DmsSettings) {
+            _flow.value = transform(_flow.value)
+        }
+    }
+
+    /**
      * Set up test fixtures before each test method execution.
      */
     @Before
     fun setUp() {
+        Dispatchers.setMain(testDispatcher)
         fakeAlertManager = FakeAlertManager()
-        viewModel = DmsViewModel(alertManager = fakeAlertManager)
+        fakeRepository = FakeSettingsRepository()
+        viewModel = DmsViewModel(
+            alertManager = fakeAlertManager,
+            settingsRepository = fakeRepository
+        )
+    }
+
+    /**
+     * Clean up test dispatchers after test execution.
+     */
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
     }
 
     /**
@@ -86,9 +130,10 @@ class DmsViewModelTest {
      * Verifies that toggling audio updates the settings flow and notifies AlertManager.
      */
     @Test
-    fun testToggleAudioUpdatesSettingsAndNotifiesAlertManager() {
+    fun testToggleAudioUpdatesSettingsAndNotifiesAlertManager() = runTest {
         val initialAudio = viewModel.settings.value.isAudioEnabled
         viewModel.toggleAudio()
+        testScheduler.advanceUntilIdle()
 
         assertEquals(!initialAudio, viewModel.settings.value.isAudioEnabled)
         assertEquals(!initialAudio, fakeAlertManager.lastAudioEnabled)
@@ -98,9 +143,10 @@ class DmsViewModelTest {
      * Verifies that toggling vibration updates the settings flow and notifies AlertManager.
      */
     @Test
-    fun testToggleVibrationUpdatesSettingsAndNotifiesAlertManager() {
+    fun testToggleVibrationUpdatesSettingsAndNotifiesAlertManager() = runTest {
         val initialVibration = viewModel.settings.value.isVibrationEnabled
         viewModel.toggleVibration()
+        testScheduler.advanceUntilIdle()
 
         assertEquals(!initialVibration, viewModel.settings.value.isVibrationEnabled)
         assertEquals(!initialVibration, fakeAlertManager.lastVibrationEnabled)
@@ -110,9 +156,10 @@ class DmsViewModelTest {
      * Verifies that toggling camera preview toggles the preview visibility state.
      */
     @Test
-    fun testToggleCameraPreviewTogglesVisibility() {
+    fun testToggleCameraPreviewTogglesVisibility() = runTest {
         val initialPreview = viewModel.settings.value.isCameraPreviewVisible
         viewModel.toggleCameraPreview()
+        testScheduler.advanceUntilIdle()
 
         assertEquals(!initialPreview, viewModel.settings.value.isCameraPreviewVisible)
     }
@@ -121,8 +168,9 @@ class DmsViewModelTest {
      * Verifies that updating eye sensitivity threshold updates settings.
      */
     @Test
-    fun testUpdateEyeSensitivityModifiesThreshold() {
+    fun testUpdateEyeSensitivityModifiesThreshold() = runTest {
         viewModel.updateEyeSensitivity(0.45f)
+        testScheduler.advanceUntilIdle()
         assertEquals(0.45f, viewModel.settings.value.eyeOpenThreshold, 0.001f)
     }
 
@@ -130,10 +178,12 @@ class DmsViewModelTest {
      * Verifies that updating drowsiness warning and critical durations modifies settings.
      */
     @Test
-    fun testUpdateDrowsyThresholdsModifiesDurations() {
+    fun testUpdateDrowsyThresholdsModifiesDurations() = runTest {
         viewModel.updateDrowsyThresholds(warningMs = 1200L, criticalMs = 2200L)
+        testScheduler.advanceUntilIdle()
 
         assertEquals(1200L, viewModel.settings.value.drowsyWarningDurationMs)
         assertEquals(2200L, viewModel.settings.value.drowsyCriticalDurationMs)
     }
 }
+

@@ -57,6 +57,9 @@ dependencies {
     // ML Kit Face Detection
     implementation(libs.mlkit.face.detection)
 
+    // DataStore Preferences
+    implementation(libs.androidx.datastore.preferences)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(platform(libs.androidx.compose.bom))
