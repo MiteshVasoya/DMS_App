@@ -5,22 +5,25 @@ import androidx.annotation.OptIn
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
-import com.example.dms_app.model.AlertLevel
 import com.example.dms_app.model.AlertnessState
 import com.example.dms_app.model.DmsSettings
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
-import kotlin.math.abs
 
 /**
- * ImageAnalysis.Analyzer that detects driver faces using ML Kit,
- * calculating eye closure time and head orientation to detect drowsiness and distraction.
+ * ImageAnalysis.Analyzer that detects driver faces using ML Kit and delegates
+ * alertness state evaluation to [AlertnessEvaluator].
+ *
+ * @param settings Configurable sensitivity thresholds for the DMS.
+ * @param onStateUpdated Callback invoked on each processed frame with the updated [AlertnessState].
+ * @param evaluator State machine evaluator instance responsible for alertness detection logic.
  */
-class DmsFaceAnalyzer(
+class DmsFaceAnalyzer @JvmOverloads constructor(
     private var settings: DmsSettings,
-    private val onStateUpdated: (AlertnessState) -> Unit
+    private val onStateUpdated: (AlertnessState) -> Unit,
+    private val evaluator: AlertnessEvaluator = AlertnessEvaluator(settings)
 ) : ImageAnalysis.Analyzer {
 
     private val detectorOptions = FaceDetectorOptions.Builder()
@@ -32,20 +35,33 @@ class DmsFaceAnalyzer(
 
     private val detector = FaceDetection.getClient(detectorOptions)
 
-    // Tracking timestamps
-    private var eyeClosedStartTime: Long? = null
-    private var distractionStartTime: Long? = null
-    private var noFaceStartTime: Long? = null
-
     // FPS calculation
     private var frameCount = 0
     private var lastFpsTimestamp = SystemClock.elapsedRealtime()
     private var currentFps = 0
 
+    /**
+     * Updates detection settings and propagates them to the underlying [evaluator].
+     *
+     * @param newSettings Updated DMS configuration settings.
+     */
     fun updateSettings(newSettings: DmsSettings) {
         settings = newSettings
+        evaluator.updateSettings(newSettings)
     }
 
+    /**
+     * Resets the underlying [evaluator] state timers.
+     */
+    fun reset() {
+        evaluator.reset()
+    }
+
+    /**
+     * Analyzes a camera frame proxy to detect faces and evaluate alertness.
+     *
+     * @param imageProxy The camera frame image proxy to analyze.
+     */
     @OptIn(ExperimentalGetImage::class)
     override fun analyze(imageProxy: ImageProxy) {
         val mediaImage = imageProxy.image
@@ -85,115 +101,45 @@ class DmsFaceAnalyzer(
             }
     }
 
+    /**
+     * Evaluates detected faces against the [evaluator] and notifies [onStateUpdated].
+     *
+     * @param faces List of faces detected by ML Kit.
+     * @param now Current timestamp in milliseconds.
+     */
     private fun processFaces(faces: List<Face>, now: Long) {
         if (faces.isEmpty()) {
-            if (noFaceStartTime == null) {
-                noFaceStartTime = now
-            }
-            eyeClosedStartTime = null
-            distractionStartTime = null
-
-            val noFaceDuration = now - (noFaceStartTime ?: now)
-            val alertLevel = if (noFaceDuration > settings.distractionWarningDurationMs) {
-                AlertLevel.WARNING_DISTRACTED
-            } else {
-                AlertLevel.FACE_NOT_DETECTED
-            }
-
-            onStateUpdated(
-                AlertnessState(
-                    faceDetected = false,
-                    alertLevel = alertLevel,
-                    statusMessage = if (noFaceDuration > settings.distractionWarningDurationMs) {
-                        "Driver not detected! Watch road!"
-                    } else {
-                        "Searching for driver's face..."
-                    },
-                    fps = currentFps
-                )
+            val state = evaluator.evaluate(
+                faceDetected = false,
+                leftEyeOpen = null,
+                rightEyeOpen = null,
+                yaw = null,
+                pitch = null,
+                now = now,
+                currentFps = currentFps
             )
+            onStateUpdated(state)
             return
         }
 
-        noFaceStartTime = null
         // Take the primary (largest/first) detected face
         val face = faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() } ?: faces[0]
 
-        val leftEyeOpen = face.leftEyeOpenProbability
-        val rightEyeOpen = face.rightEyeOpenProbability
-        val yaw = face.headEulerAngleY
-        val pitch = face.headEulerAngleX
-
-        // 1. Drowsiness Check: Eyes closed threshold
-        val areEyesClosed = if (leftEyeOpen != null && rightEyeOpen != null) {
-            leftEyeOpen < settings.eyeOpenThreshold && rightEyeOpen < settings.eyeOpenThreshold
-        } else if (leftEyeOpen != null) {
-            leftEyeOpen < settings.eyeOpenThreshold
-        } else if (rightEyeOpen != null) {
-            rightEyeOpen < settings.eyeOpenThreshold
-        } else {
-            false
-        }
-
-        var eyeClosedDuration = 0L
-        if (areEyesClosed) {
-            if (eyeClosedStartTime == null) {
-                eyeClosedStartTime = now
-            }
-            eyeClosedDuration = now - (eyeClosedStartTime ?: now)
-        } else {
-            eyeClosedStartTime = null
-        }
-
-        // 2. Distraction Check: Head yaw or pitch excessive
-        val isHeadTurned = (yaw != null && abs(yaw) > settings.yawThresholdDegrees) ||
-                (pitch != null && abs(pitch) > settings.pitchThresholdDegrees)
-
-        var distractionDuration = 0L
-        if (isHeadTurned) {
-            if (distractionStartTime == null) {
-                distractionStartTime = now
-            }
-            distractionDuration = now - (distractionStartTime ?: now)
-        } else {
-            distractionStartTime = null
-        }
-
-        // Determine alertness level & status message
-        val (level, message) = when {
-            eyeClosedDuration >= settings.drowsyCriticalDurationMs -> {
-                AlertLevel.CRITICAL_DROWSY to "WAKE UP! EYES CLOSED!"
-            }
-            eyeClosedDuration >= settings.drowsyWarningDurationMs -> {
-                AlertLevel.WARNING_DROWSY to "Warning: Eyes closed!"
-            }
-            distractionDuration >= settings.distractionCriticalDurationMs -> {
-                AlertLevel.CRITICAL_DISTRACTED to "DANGER: LOOK AT ROAD!"
-            }
-            distractionDuration >= settings.distractionWarningDurationMs -> {
-                AlertLevel.WARNING_DISTRACTED to "Please focus on the road!"
-            }
-            else -> {
-                AlertLevel.NORMAL to "Driver Alert"
-            }
-        }
-
-        onStateUpdated(
-            AlertnessState(
-                faceDetected = true,
-                leftEyeOpenProb = leftEyeOpen,
-                rightEyeOpenProb = rightEyeOpen,
-                headEulerAngleY = yaw,
-                headEulerAngleX = pitch,
-                eyeClosedDurationMs = eyeClosedDuration,
-                distractedDurationMs = distractionDuration,
-                alertLevel = level,
-                statusMessage = message,
-                fps = currentFps
-            )
+        val state = evaluator.evaluate(
+            faceDetected = true,
+            leftEyeOpen = face.leftEyeOpenProbability,
+            rightEyeOpen = face.rightEyeOpenProbability,
+            yaw = face.headEulerAngleY,
+            pitch = face.headEulerAngleX,
+            now = now,
+            currentFps = currentFps
         )
+        onStateUpdated(state)
     }
 
+    /**
+     * Closes the ML Kit face detector resources.
+     */
     fun close() {
         try {
             detector.close()
