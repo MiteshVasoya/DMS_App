@@ -16,14 +16,21 @@ import androidx.lifecycle.LifecycleService
 import com.example.dms_app.MainActivity
 import com.example.dms_app.R
 import com.example.dms_app.audio.AlertManager
+import com.example.dms_app.data.DmsSettingsRepository
+import com.example.dms_app.data.DmsSettingsRepositoryImpl
 import com.example.dms_app.detection.DmsFaceAnalyzer
 import com.example.dms_app.model.AlertLevel
 import com.example.dms_app.model.AlertnessState
 import com.example.dms_app.model.DmsSettings
 import com.example.dms_app.overlay.DmsOverlayManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 
 /**
@@ -37,6 +44,24 @@ class DmsForegroundService : LifecycleService() {
     private lateinit var overlayManager: DmsOverlayManager
     private var faceAnalyzer: DmsFaceAnalyzer? = null
     private val analysisExecutor = Executors.newSingleThreadExecutor()
+    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
+    /**
+     * Optional settings repository instance for testing and dynamic preference synchronization.
+     */
+    var settingsRepository: DmsSettingsRepository? = null
+
+    /**
+     * Internal getter for [AlertManager] to support testing and state verification.
+     */
+    val currentAlertManager: AlertManager?
+        get() = if (::alertManager.isInitialized) alertManager else null
+
+    /**
+     * Internal getter for [DmsFaceAnalyzer] to support testing and state verification.
+     */
+    val currentFaceAnalyzer: DmsFaceAnalyzer?
+        get() = faceAnalyzer
 
     override fun onCreate() {
         super.onCreate()
@@ -46,9 +71,10 @@ class DmsForegroundService : LifecycleService() {
         alertManager = AlertManager(applicationContext)
         overlayManager = DmsOverlayManager(applicationContext)
 
-        val settings = DmsSettings()
+        val repo = settingsRepository ?: DmsSettingsRepositoryImpl(applicationContext)
+        settingsRepository = repo
         faceAnalyzer = DmsFaceAnalyzer(
-            settings = settings,
+            settings = DmsSettings(),
             onStateUpdated = { state ->
                 _alertnessState.value = state
                 alertManager.updateAlertLevel(state.alertLevel)
@@ -56,6 +82,19 @@ class DmsForegroundService : LifecycleService() {
                 updateNotification(state)
             }
         )
+
+        // Observe DataStore persistent settings updates in real time
+        serviceScope.launch {
+            repo.settingsFlow.collect { updatedSettings ->
+                alertManager.updateSettings(
+                    audioEnabled = updatedSettings.isAudioEnabled,
+                    vibrationEnabled = updatedSettings.isVibrationEnabled,
+                    volume = updatedSettings.alarmVolume,
+                    toneType = updatedSettings.alertToneType
+                )
+                faceAnalyzer?.updateSettings(updatedSettings)
+            }
+        }
 
         createNotificationChannel()
         startInForeground()
@@ -193,6 +232,7 @@ class DmsForegroundService : LifecycleService() {
         super.onDestroy()
         _isRunning.value = false
         instance = null
+        serviceScope.cancel()
 
         overlayManager.removeOverlay()
         alertManager.release()
