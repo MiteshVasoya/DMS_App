@@ -3,7 +3,7 @@ package com.example.dms_app.ui
 import android.Manifest
 import android.content.pm.PackageManager
 import android.content.Intent
-import android.net.Uri
+import androidx.core.net.toUri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -57,6 +57,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -130,7 +131,7 @@ private fun DmsDashboard(
         if (!Settings.canDrawOverlays(context)) {
             val intent = Intent(
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:${context.packageName}")
+                "package:${context.packageName}".toUri()
             )
             context.startActivity(intent)
         } else {
@@ -554,8 +555,8 @@ private fun DmsSettingsDialog(
     onEyeSensitivityChanged: (Float) -> Unit,
     onDrowsyThresholdsChanged: (Long, Long) -> Unit
 ) {
-    var eyeThreshold by remember { mutableStateOf(settings.eyeOpenThreshold) }
-    var warnDurationSec by remember { mutableStateOf(settings.drowsyWarningDurationMs / 1000f) }
+    var eyeThreshold by remember { mutableFloatStateOf(settings.eyeOpenThreshold) }
+    var warnDurationSec by remember { mutableFloatStateOf(settings.drowsyWarningDurationMs / 1000f) }
 
     AlertDialog(
         onDismissRequest = onDismiss,

@@ -5,10 +5,9 @@ import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
+import androidx.core.graphics.toColorInt
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
@@ -56,14 +55,9 @@ class DmsOverlayManager(private val context: Context) {
         }
     }
 
-    @SuppressLint("ClickableViewAccessibility")
+    @SuppressLint("ClickableViewAccessibility", "InflateParams")
     private fun createAndAddOverlay() {
-        val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE
-        }
+        val layoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
 
         layoutParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -161,16 +155,16 @@ class DmsOverlayManager(private val context: Context) {
 
             val (bgColor, strokeColor, dotColor) = when (state.alertLevel) {
                 AlertLevel.CRITICAL_DROWSY, AlertLevel.CRITICAL_DISTRACTED -> {
-                    Triple(Color.parseColor("#E53935"), Color.parseColor("#FFCDD2"), Color.parseColor("#FF1744"))
+                    Triple("#E53935".toColorInt(), "#FFCDD2".toColorInt(), "#FF1744".toColorInt())
                 }
                 AlertLevel.WARNING_DROWSY, AlertLevel.WARNING_DISTRACTED -> {
-                    Triple(Color.parseColor("#FB8C00"), Color.parseColor("#FFE0B2"), Color.parseColor("#FF9100"))
+                    Triple("#FB8C00".toColorInt(), "#FFE0B2".toColorInt(), "#FF9100".toColorInt())
                 }
                 AlertLevel.NORMAL -> {
-                    Triple(Color.parseColor("#2E7D32"), Color.parseColor("#A5D6A7"), Color.parseColor("#00E676"))
+                    Triple("#2E7D32".toColorInt(), "#A5D6A7".toColorInt(), "#00E676".toColorInt())
                 }
                 AlertLevel.FACE_NOT_DETECTED -> {
-                    Triple(Color.parseColor("#424242"), Color.parseColor("#9E9E9E"), Color.parseColor("#757575"))
+                    Triple("#424242".toColorInt(), "#9E9E9E".toColorInt(), "#757575".toColorInt())
                 }
             }
 
@@ -190,7 +184,7 @@ class DmsOverlayManager(private val context: Context) {
         when (level) {
             AlertLevel.CRITICAL_DROWSY, AlertLevel.CRITICAL_DISTRACTED -> {
                 // Urgent flashing pulse
-                val flashColor = Color.parseColor("#B71C1C")
+                val flashColor = "#B71C1C".toColorInt()
                 pulseAnimator = ValueAnimator.ofObject(ArgbEvaluator(), baseColor, flashColor).apply {
                     duration = 200
                     repeatCount = ValueAnimator.INFINITE
@@ -204,7 +198,7 @@ class DmsOverlayManager(private val context: Context) {
             }
             AlertLevel.WARNING_DROWSY, AlertLevel.WARNING_DISTRACTED -> {
                 // Caution slow pulse
-                val flashColor = Color.parseColor("#E65100")
+                val flashColor = "#E65100".toColorInt()
                 pulseAnimator = ValueAnimator.ofObject(ArgbEvaluator(), baseColor, flashColor).apply {
                     duration = 450
                     repeatCount = ValueAnimator.INFINITE

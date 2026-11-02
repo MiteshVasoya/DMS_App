@@ -1,3 +1,8 @@
 <resources>
     <string name="app_name">DMS_App</string>
+    <string name="dms_overlay_active">DMS Active</string>
+    <string name="dms_overlay_eye_left_placeholder">L:95%</string>
+    <string name="dms_overlay_eye_right_placeholder">R:95%</string>
+    <string name="dms_overlay_dot_separator">•</string>
+    <string name="dms_overlay_icon_desc">Driver monitoring status indicator</string>
 </resources>

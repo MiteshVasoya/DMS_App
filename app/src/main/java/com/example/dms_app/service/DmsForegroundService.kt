@@ -7,7 +7,6 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.os.Build
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -70,15 +69,11 @@ class DmsForegroundService : LifecycleService() {
 
     private fun startInForeground() {
         val notification = buildNotification(AlertnessState())
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
-        }
+        startForeground(
+            NOTIFICATION_ID,
+            notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+        )
     }
 
     private fun startCameraMonitoring() {
@@ -127,18 +122,16 @@ class DmsForegroundService : LifecycleService() {
     }
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Driver Monitoring Active",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Monitors driver alertness and drowsiness in background"
-                setShowBadge(false)
-            }
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "Driver Monitoring Active",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Monitors driver alertness and drowsiness in background"
+            setShowBadge(false)
         }
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(channel)
     }
 
     private fun buildNotification(state: AlertnessState): Notification {
@@ -223,11 +216,7 @@ class DmsForegroundService : LifecycleService() {
 
         fun start(context: Context) {
             val intent = Intent(context, DmsForegroundService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            context.startForegroundService(intent)
         }
 
         fun stop(context: Context) {
