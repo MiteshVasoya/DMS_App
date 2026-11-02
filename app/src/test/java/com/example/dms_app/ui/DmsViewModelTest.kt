@@ -51,7 +51,12 @@ class DmsViewModelTest {
             stopAlertCalled = true
         }
 
-        override fun updateSettings(audioEnabled: Boolean, vibrationEnabled: Boolean) {
+        override fun updateSettings(
+            audioEnabled: Boolean,
+            vibrationEnabled: Boolean,
+            volume: Int,
+            toneType: Int
+        ) {
             lastAudioEnabled = audioEnabled
             lastVibrationEnabled = vibrationEnabled
         }
@@ -184,6 +189,26 @@ class DmsViewModelTest {
 
         assertEquals(1200L, viewModel.settings.value.drowsyWarningDurationMs)
         assertEquals(2200L, viewModel.settings.value.drowsyCriticalDurationMs)
+    }
+
+    /**
+     * Verifies that updating alarm volume updates settings and propagates to AlertManager.
+     */
+    @Test
+    fun testUpdateAlarmVolumeModifiesVolume() = runTest {
+        viewModel.updateAlarmVolume(75)
+        testScheduler.advanceUntilIdle()
+        assertEquals(75, viewModel.settings.value.alarmVolume)
+    }
+
+    /**
+     * Verifies that updating alert tone type updates settings and propagates to AlertManager.
+     */
+    @Test
+    fun testUpdateAlertToneTypeModifiesTone() = runTest {
+        viewModel.updateAlertToneType(2)
+        testScheduler.advanceUntilIdle()
+        assertEquals(2, viewModel.settings.value.alertToneType)
     }
 }
 

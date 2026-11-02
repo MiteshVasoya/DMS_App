@@ -58,6 +58,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -274,7 +275,9 @@ private fun DmsDashboard(
                 onDismiss = { showSettingsDialog = false },
                 onToggleCameraPreview = { viewModel.toggleCameraPreview() },
                 onEyeSensitivityChanged = { viewModel.updateEyeSensitivity(it) },
-                onDrowsyThresholdsChanged = { warn, crit -> viewModel.updateDrowsyThresholds(warn, crit) }
+                onDrowsyThresholdsChanged = { warn, crit -> viewModel.updateDrowsyThresholds(warn, crit) },
+                onAlarmVolumeChanged = { viewModel.updateAlarmVolume(it) },
+                onAlertToneTypeChanged = { viewModel.updateAlertToneType(it) }
             )
         }
     }
@@ -548,6 +551,19 @@ private fun BottomControlsBar(
     }
 }
 
+/**
+ * Dialog displaying configurable driver settings including thresholds, camera preview,
+ * alarm volume, and alert sound tone styles.
+ *
+ * @param settings Current active driver monitoring settings.
+ * @param isCameraPreviewVisible Whether camera preview is rendered.
+ * @param onDismiss Callback invoked when dialog is dismissed.
+ * @param onToggleCameraPreview Callback invoked to toggle camera preview state.
+ * @param onEyeSensitivityChanged Callback invoked with updated eye closure sensitivity.
+ * @param onDrowsyThresholdsChanged Callback invoked with updated warning and critical durations.
+ * @param onAlarmVolumeChanged Callback invoked when hardware alarm stream volume is adjusted.
+ * @param onAlertToneTypeChanged Callback invoked when driver selects an alternate alert sound effect.
+ */
 @Composable
 private fun DmsSettingsDialog(
     settings: DmsSettings,
@@ -555,10 +571,14 @@ private fun DmsSettingsDialog(
     onDismiss: () -> Unit,
     onToggleCameraPreview: () -> Unit,
     onEyeSensitivityChanged: (Float) -> Unit,
-    onDrowsyThresholdsChanged: (Long, Long) -> Unit
+    onDrowsyThresholdsChanged: (Long, Long) -> Unit,
+    onAlarmVolumeChanged: (Int) -> Unit = {},
+    onAlertToneTypeChanged: (Int) -> Unit = {}
 ) {
     var eyeThreshold by remember { mutableFloatStateOf(settings.eyeOpenThreshold) }
     var warnDurationSec by remember { mutableFloatStateOf(settings.drowsyWarningDurationMs / 1000f) }
+    var alarmVolume by remember { mutableFloatStateOf(settings.alarmVolume.toFloat()) }
+    var alertToneType by remember { mutableIntStateOf(settings.alertToneType) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -587,6 +607,53 @@ private fun DmsSettingsDialog(
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Text(if (isCameraPreviewVisible) "On" else "Off")
+                    }
+                }
+
+                // Alarm Volume Slider
+                Column {
+                    Text(
+                        text = "Alarm Volume: ${alarmVolume.toInt()}%",
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Hardware stream volume for driver alerts.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Slider(
+                        value = alarmVolume,
+                        onValueChange = { alarmVolume = it },
+                        valueRange = 0f..100f
+                    )
+                }
+
+                // Alert Tone Selection
+                Column {
+                    Text(text = "Alert Tone Style", fontWeight = FontWeight.Medium)
+                    Text(
+                        text = "Select warning and alarm sound effect.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val tones = listOf("Standard", "Prompt", "Key DTMF")
+                        tones.forEachIndexed { index, name ->
+                            Button(
+                                onClick = { alertToneType = index },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (alertToneType == index) Color(0xFF1E88E5) else Color.DarkGray
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(name, fontSize = 11.sp, textAlign = TextAlign.Center)
+                            }
+                        }
                     }
                 }
 
@@ -634,6 +701,8 @@ private fun DmsSettingsDialog(
                     val warnMs = (warnDurationSec * 1000).toLong()
                     val critMs = warnMs + 800L
                     onDrowsyThresholdsChanged(warnMs, critMs)
+                    onAlarmVolumeChanged(alarmVolume.toInt())
+                    onAlertToneTypeChanged(alertToneType)
                     onDismiss()
                 }
             ) {

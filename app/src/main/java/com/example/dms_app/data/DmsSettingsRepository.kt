@@ -74,6 +74,8 @@ class DmsSettingsRepositoryImpl(
         val KEY_VIBRATION_ENABLED = booleanPreferencesKey("is_vibration_enabled")
         /** Preference key for camera preview visibility flag. */
         val KEY_PREVIEW_VISIBLE = booleanPreferencesKey("is_camera_preview_visible")
+        val KEY_ALARM_VOLUME = androidx.datastore.preferences.core.intPreferencesKey("alarm_volume")
+        val KEY_ALERT_TONE_TYPE = androidx.datastore.preferences.core.intPreferencesKey("alert_tone_type")
     }
 
     override val settingsFlow: Flow<DmsSettings> = dataStore.data
@@ -103,6 +105,8 @@ class DmsSettingsRepositoryImpl(
             preferences[KEY_AUDIO_ENABLED] = newSettings.isAudioEnabled
             preferences[KEY_VIBRATION_ENABLED] = newSettings.isVibrationEnabled
             preferences[KEY_PREVIEW_VISIBLE] = newSettings.isCameraPreviewVisible
+            preferences[KEY_ALARM_VOLUME] = newSettings.alarmVolume
+            preferences[KEY_ALERT_TONE_TYPE] = newSettings.alertToneType
         }
     }
 
@@ -125,7 +129,9 @@ class DmsSettingsRepositoryImpl(
             pitchThresholdDegrees = preferences[KEY_PITCH_THRESHOLD] ?: default.pitchThresholdDegrees,
             isAudioEnabled = preferences[KEY_AUDIO_ENABLED] ?: default.isAudioEnabled,
             isVibrationEnabled = preferences[KEY_VIBRATION_ENABLED] ?: default.isVibrationEnabled,
-            isCameraPreviewVisible = preferences[KEY_PREVIEW_VISIBLE] ?: default.isCameraPreviewVisible
+            isCameraPreviewVisible = preferences[KEY_PREVIEW_VISIBLE] ?: default.isCameraPreviewVisible,
+            alarmVolume = preferences[KEY_ALARM_VOLUME] ?: default.alarmVolume,
+            alertToneType = preferences[KEY_ALERT_TONE_TYPE] ?: default.alertToneType
         )
     }
 }

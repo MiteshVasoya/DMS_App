@@ -47,5 +47,7 @@ data class DmsSettings(
     val distractionCriticalDurationMs: Long = 2500L,
     val isAudioEnabled: Boolean = true,
     val isVibrationEnabled: Boolean = true,
-    val isCameraPreviewVisible: Boolean = true
+    val isCameraPreviewVisible: Boolean = true,
+    val alarmVolume: Int = 100,
+    val alertToneType: Int = 0
 )

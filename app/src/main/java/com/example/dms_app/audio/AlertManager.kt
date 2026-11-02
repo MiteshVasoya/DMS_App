@@ -23,8 +23,14 @@ open class AlertManager(private val context: Context?) {
     private val scope = CoroutineScope(Dispatchers.Default)
     private var alertJob: Job? = null
     private var currentLevel: AlertLevel = AlertLevel.NORMAL
+    val currentAlertLevel: AlertLevel
+        get() = currentLevel
     private var isAudioEnabled: Boolean = true
     private var isVibrationEnabled: Boolean = true
+    var alarmVolume: Int = 100
+        private set
+    var alertToneType: Int = 0
+        private set
 
     private var toneGenerator: ToneGenerator? = null
 
@@ -34,16 +40,55 @@ open class AlertManager(private val context: Context?) {
     }
 
     init {
+        createToneGenerator()
+    }
+
+    /**
+     * Recreates the tone generator with the configured hardware stream and volume.
+     */
+    private fun createToneGenerator() {
         try {
-            toneGenerator = ToneGenerator(AudioManager.STREAM_ALARM, 100)
+            toneGenerator?.release()
+            toneGenerator = ToneGenerator(AudioManager.STREAM_ALARM, alarmVolume.coerceIn(0, 100))
         } catch (_: Throwable) {
             // ToneGenerator init fallback in unit test / headless environments
         }
     }
 
+    /**
+     * Updates alert settings including audio and vibration toggles.
+     *
+     * @param audioEnabled Whether audio alarms are permitted to sound.
+     * @param vibrationEnabled Whether haptic vibration feedback is permitted.
+     */
     open fun updateSettings(audioEnabled: Boolean, vibrationEnabled: Boolean) {
+        updateSettings(audioEnabled, vibrationEnabled, alarmVolume, alertToneType)
+    }
+
+    /**
+     * Updates alert settings including audio/vibration toggles, hardware volume, and tone style.
+     *
+     * @param audioEnabled Whether audio alarms are permitted to sound.
+     * @param vibrationEnabled Whether haptic vibration feedback is permitted.
+     * @param volume Hardware alarm stream volume (scaled 0 to 100).
+     * @param toneType Sound effect selection index for audible alerts.
+     */
+    open fun updateSettings(
+        audioEnabled: Boolean,
+        vibrationEnabled: Boolean,
+        volume: Int = alarmVolume,
+        toneType: Int = alertToneType
+    ) {
+        val volumeChanged = volume != alarmVolume
         isAudioEnabled = audioEnabled
         isVibrationEnabled = vibrationEnabled
+        alarmVolume = volume.coerceIn(0, 100)
+        alertToneType = toneType
+
+        if (volumeChanged) {
+            createToneGenerator()
+        }
+
         if (!audioEnabled && !vibrationEnabled) {
             stopAlert()
         }
@@ -83,10 +128,11 @@ open class AlertManager(private val context: Context?) {
 
     private fun playTone(critical: Boolean, durationMs: Int) {
         try {
-            val toneType = if (critical) {
-                ToneGenerator.TONE_CDMA_EMERGENCY_RINGBACK
-            } else {
-                ToneGenerator.TONE_PROP_BEEP2
+            val toneType = when {
+                critical -> ToneGenerator.TONE_CDMA_EMERGENCY_RINGBACK
+                alertToneType == 1 -> ToneGenerator.TONE_PROP_PROMPT
+                alertToneType == 2 -> ToneGenerator.TONE_DTMF_D
+                else -> ToneGenerator.TONE_PROP_BEEP2
             }
             toneGenerator?.startTone(toneType, durationMs)
         } catch (_: Exception) {

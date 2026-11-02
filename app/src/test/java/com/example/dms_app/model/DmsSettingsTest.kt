@@ -170,4 +170,26 @@ class DmsSettingsTest {
         assertNotEquals(settingsA, settingsC)
         assertNotEquals(settingsA.hashCode(), settingsC.hashCode())
     }
+
+    /**
+     * Verifies default volume and tone type values.
+     */
+    @Test
+    fun testDefaultVolumeAndToneType() {
+        val settings = DmsSettings()
+        assertEquals(100, settings.alarmVolume)
+        assertEquals(0, settings.alertToneType)
+    }
+
+    /**
+     * Verifies that copy preserves or modifies alarm volume and tone type.
+     */
+    @Test
+    fun testCopyModifiesAlarmVolumeAndToneType() {
+        val settings = DmsSettings()
+        val modified = settings.copy(alarmVolume = 60, alertToneType = 1)
+        assertEquals(60, modified.alarmVolume)
+        assertEquals(1, modified.alertToneType)
+        assertEquals(settings.eyeOpenThreshold, modified.eyeOpenThreshold, 0.001f)
+    }
 }
