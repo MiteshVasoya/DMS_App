@@ -179,17 +179,32 @@ class DmsSettingsTest {
         val settings = DmsSettings()
         assertEquals(100, settings.alarmVolume)
         assertEquals(0, settings.alertToneType)
+        assertTrue(settings.isMotionDetectionEnabled)
+        assertEquals(3.0f, settings.rapidAccelThresholdMps2, 0.001f)
+        assertEquals(4.0f, settings.harshBrakingThresholdMps2, 0.001f)
+        assertEquals(3.0f, settings.crashThresholdGForce, 0.001f)
     }
 
     /**
-     * Verifies that copy preserves or modifies alarm volume and tone type.
+     * Verifies that copy preserves or modifies alarm volume, tone type, and motion settings.
      */
     @Test
     fun testCopyModifiesAlarmVolumeAndToneType() {
         val settings = DmsSettings()
-        val modified = settings.copy(alarmVolume = 60, alertToneType = 1)
+        val modified = settings.copy(
+            alarmVolume = 60,
+            alertToneType = 1,
+            isMotionDetectionEnabled = false,
+            rapidAccelThresholdMps2 = 2.5f,
+            harshBrakingThresholdMps2 = 5.0f,
+            crashThresholdGForce = 4.0f
+        )
         assertEquals(60, modified.alarmVolume)
         assertEquals(1, modified.alertToneType)
+        assertFalse(modified.isMotionDetectionEnabled)
+        assertEquals(2.5f, modified.rapidAccelThresholdMps2, 0.001f)
+        assertEquals(5.0f, modified.harshBrakingThresholdMps2, 0.001f)
+        assertEquals(4.0f, modified.crashThresholdGForce, 0.001f)
         assertEquals(settings.eyeOpenThreshold, modified.eyeOpenThreshold, 0.001f)
     }
 }

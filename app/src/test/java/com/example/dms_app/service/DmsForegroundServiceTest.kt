@@ -118,8 +118,11 @@ class DmsForegroundServiceTest {
      */
     private fun getStatusText(state: AlertnessState): String {
         return when (state.alertLevel) {
+            AlertLevel.CRITICAL_CRASH -> "⚠️ EMERGENCY: Collision / Crash detected!"
             AlertLevel.CRITICAL_DROWSY -> "⚠️ CRITICAL: Drowsiness detected! Wake up!"
             AlertLevel.CRITICAL_DISTRACTED -> "⚠️ Distraction detected! Focus on road!"
+            AlertLevel.HARSH_BRAKING -> "🛑 Harsh braking detected"
+            AlertLevel.HARSH_ACCELERATION -> "⚡ Rapid acceleration detected"
             AlertLevel.WARNING_DROWSY -> "Caution: Eyes closing"
             AlertLevel.WARNING_DISTRACTED -> "Caution: Looking away"
             AlertLevel.NORMAL -> "Driver Alert & Protected"

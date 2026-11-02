@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.dms_app.model.DmsSettings
@@ -74,8 +75,16 @@ class DmsSettingsRepositoryImpl(
         val KEY_VIBRATION_ENABLED = booleanPreferencesKey("is_vibration_enabled")
         /** Preference key for camera preview visibility flag. */
         val KEY_PREVIEW_VISIBLE = booleanPreferencesKey("is_camera_preview_visible")
-        val KEY_ALARM_VOLUME = androidx.datastore.preferences.core.intPreferencesKey("alarm_volume")
-        val KEY_ALERT_TONE_TYPE = androidx.datastore.preferences.core.intPreferencesKey("alert_tone_type")
+        val KEY_ALARM_VOLUME = intPreferencesKey("alarm_volume")
+        val KEY_ALERT_TONE_TYPE = intPreferencesKey("alert_tone_type")
+        /** Preference key for motion detection enabled flag. */
+        val KEY_MOTION_DETECTION_ENABLED = booleanPreferencesKey("is_motion_detection_enabled")
+        /** Preference key for rapid acceleration threshold (m/s^2). */
+        val KEY_RAPID_ACCEL_THRESHOLD = floatPreferencesKey("rapid_accel_threshold_mps2")
+        /** Preference key for harsh braking threshold (m/s^2). */
+        val KEY_HARSH_BRAKING_THRESHOLD = floatPreferencesKey("harsh_braking_threshold_mps2")
+        /** Preference key for crash threshold (G-force). */
+        val KEY_CRASH_THRESHOLD_G = floatPreferencesKey("crash_threshold_g_force")
     }
 
     override val settingsFlow: Flow<DmsSettings> = dataStore.data
@@ -107,6 +116,10 @@ class DmsSettingsRepositoryImpl(
             preferences[KEY_PREVIEW_VISIBLE] = newSettings.isCameraPreviewVisible
             preferences[KEY_ALARM_VOLUME] = newSettings.alarmVolume
             preferences[KEY_ALERT_TONE_TYPE] = newSettings.alertToneType
+            preferences[KEY_MOTION_DETECTION_ENABLED] = newSettings.isMotionDetectionEnabled
+            preferences[KEY_RAPID_ACCEL_THRESHOLD] = newSettings.rapidAccelThresholdMps2
+            preferences[KEY_HARSH_BRAKING_THRESHOLD] = newSettings.harshBrakingThresholdMps2
+            preferences[KEY_CRASH_THRESHOLD_G] = newSettings.crashThresholdGForce
         }
     }
 
@@ -131,7 +144,11 @@ class DmsSettingsRepositoryImpl(
             isVibrationEnabled = preferences[KEY_VIBRATION_ENABLED] ?: default.isVibrationEnabled,
             isCameraPreviewVisible = preferences[KEY_PREVIEW_VISIBLE] ?: default.isCameraPreviewVisible,
             alarmVolume = preferences[KEY_ALARM_VOLUME] ?: default.alarmVolume,
-            alertToneType = preferences[KEY_ALERT_TONE_TYPE] ?: default.alertToneType
+            alertToneType = preferences[KEY_ALERT_TONE_TYPE] ?: default.alertToneType,
+            isMotionDetectionEnabled = preferences[KEY_MOTION_DETECTION_ENABLED] ?: default.isMotionDetectionEnabled,
+            rapidAccelThresholdMps2 = preferences[KEY_RAPID_ACCEL_THRESHOLD] ?: default.rapidAccelThresholdMps2,
+            harshBrakingThresholdMps2 = preferences[KEY_HARSH_BRAKING_THRESHOLD] ?: default.harshBrakingThresholdMps2,
+            crashThresholdGForce = preferences[KEY_CRASH_THRESHOLD_G] ?: default.crashThresholdGForce
         )
     }
 }

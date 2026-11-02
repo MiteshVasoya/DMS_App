@@ -7,9 +7,11 @@ import com.example.dms_app.audio.AlertManager
 import com.example.dms_app.data.DmsSettingsRepository
 import com.example.dms_app.data.DmsSettingsRepositoryImpl
 import com.example.dms_app.detection.DmsFaceAnalyzer
+import com.example.dms_app.detection.VehicleMotionDetector
 import com.example.dms_app.model.AlertLevel
 import com.example.dms_app.model.AlertnessState
 import com.example.dms_app.model.DmsSettings
+import com.example.dms_app.model.MotionEventType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,17 +21,19 @@ import kotlinx.coroutines.launch
 
 /**
  * ViewModel managing driver alertness telemetry, configuration settings,
- * audio/haptic alert lifecycle, and monitoring state.
+ * audio/haptic alert lifecycle, vehicle dynamics, and monitoring state.
  *
  * @param application Application context used for system services and repository instantiation.
  * @param alertManager Alert coordinator responsible for audio tones and haptic feedback.
  * @param customFaceAnalyzer Optional preconfigured face analyzer for testing or custom ML pipelines.
+ * @param customMotionDetector Optional preconfigured motion detector for testing.
  * @param settingsRepository Optional repository handling persistence and streaming of [DmsSettings].
  */
 class DmsViewModel @JvmOverloads constructor(
     application: Application? = null,
     private val alertManager: AlertManager = AlertManager(application?.applicationContext),
     customFaceAnalyzer: DmsFaceAnalyzer? = null,
+    customMotionDetector: VehicleMotionDetector? = null,
     private val settingsRepository: DmsSettingsRepository? = application?.let { DmsSettingsRepositoryImpl(it) }
 ) : AndroidViewModel(application ?: Application()) {
 
@@ -65,13 +69,7 @@ class DmsViewModel @JvmOverloads constructor(
         DmsFaceAnalyzer(
             settings = settings.value,
             onStateUpdated = { newState ->
-                if (_isMonitoring.value) {
-                    _alertnessState.value = newState
-                    alertManager.updateAlertLevel(newState.alertLevel)
-                } else {
-                    _alertnessState.value = AlertnessState(statusMessage = "Monitoring paused")
-                    alertManager.updateAlertLevel(AlertLevel.NORMAL)
-                }
+                updateAlertnessFromFace(newState)
             }
         )
     } catch (_: Throwable) {
@@ -79,8 +77,24 @@ class DmsViewModel @JvmOverloads constructor(
         null
     }
 
+    /**
+     * Active vehicle motion detector evaluating accelerometer samples.
+     */
+    val motionDetector: VehicleMotionDetector = customMotionDetector ?: VehicleMotionDetector(
+        context = application?.applicationContext,
+        settings = settings.value,
+        onMotionReading = { reading ->
+            updateMotionReading(reading.accelerationMps2, reading.gForce, reading.motionEvent)
+        }
+    )
+
     init {
-        // Observe persistent settings updates and apply to analyzer & alert manager
+        // Start motion listening if monitoring is enabled
+        if (_isMonitoring.value) {
+            motionDetector.startListening()
+        }
+
+        // Observe persistent settings updates and apply to analyzer, motion detector, & alert manager
         viewModelScope.launch {
             settings.collect { updatedSettings ->
                 alertManager.updateSettings(
@@ -90,7 +104,81 @@ class DmsViewModel @JvmOverloads constructor(
                     toneType = updatedSettings.alertToneType
                 )
                 faceAnalyzer?.updateSettings(updatedSettings)
+                motionDetector.settings = updatedSettings
             }
+        }
+    }
+
+    private fun updateAlertnessFromFace(faceState: AlertnessState) {
+        if (!_isMonitoring.value) {
+            _alertnessState.value = AlertnessState(statusMessage = "Monitoring paused")
+            alertManager.updateAlertLevel(AlertLevel.NORMAL)
+            return
+        }
+
+        // Maintain existing motion telemetry while applying vision updates
+        val currentMotion = _alertnessState.value.motionEvent
+        val resolvedLevel = resolveCombinedAlertLevel(faceState.alertLevel, currentMotion)
+        val resolvedStatus = resolveCombinedStatusMessage(faceState.statusMessage, currentMotion)
+
+        _alertnessState.value = faceState.copy(
+            currentAccelerationMps2 = _alertnessState.value.currentAccelerationMps2,
+            currentGForce = _alertnessState.value.currentGForce,
+            motionEvent = currentMotion,
+            alertLevel = resolvedLevel,
+            statusMessage = resolvedStatus
+        )
+        alertManager.updateAlertLevel(resolvedLevel)
+    }
+
+    private fun updateMotionReading(accelMps2: Float, gForce: Float, event: MotionEventType) {
+        if (!_isMonitoring.value) return
+
+        val currentVisionLevel = when (_alertnessState.value.alertLevel) {
+            AlertLevel.HARSH_ACCELERATION, AlertLevel.HARSH_BRAKING, AlertLevel.CRITICAL_CRASH -> AlertLevel.NORMAL
+            else -> _alertnessState.value.alertLevel
+        }
+
+        val resolvedLevel = resolveCombinedAlertLevel(currentVisionLevel, event)
+        val resolvedStatus = resolveCombinedStatusMessage(_alertnessState.value.statusMessage, event)
+
+        _alertnessState.value = _alertnessState.value.copy(
+            currentAccelerationMps2 = accelMps2,
+            currentGForce = gForce,
+            motionEvent = event,
+            alertLevel = resolvedLevel,
+            statusMessage = resolvedStatus
+        )
+        alertManager.updateAlertLevel(resolvedLevel)
+    }
+
+    private fun resolveCombinedAlertLevel(visionLevel: AlertLevel, motionEvent: MotionEventType): AlertLevel {
+        return when (motionEvent) {
+            MotionEventType.CRASH_DETECTED -> AlertLevel.CRITICAL_CRASH
+            MotionEventType.HARSH_BRAKING -> {
+                if (visionLevel == AlertLevel.CRITICAL_DROWSY || visionLevel == AlertLevel.CRITICAL_DISTRACTED) {
+                    visionLevel
+                } else {
+                    AlertLevel.HARSH_BRAKING
+                }
+            }
+            MotionEventType.RAPID_ACCELERATION -> {
+                if (visionLevel == AlertLevel.CRITICAL_DROWSY || visionLevel == AlertLevel.CRITICAL_DISTRACTED) {
+                    visionLevel
+                } else {
+                    AlertLevel.HARSH_ACCELERATION
+                }
+            }
+            MotionEventType.NORMAL -> visionLevel
+        }
+    }
+
+    private fun resolveCombinedStatusMessage(visionStatus: String, motionEvent: MotionEventType): String {
+        return when (motionEvent) {
+            MotionEventType.CRASH_DETECTED -> "⚠️ CRASH DETECTED!"
+            MotionEventType.HARSH_BRAKING -> "🛑 Harsh Braking Detected!"
+            MotionEventType.RAPID_ACCELERATION -> "⚡ Rapid Acceleration Detected!"
+            MotionEventType.NORMAL -> visionStatus
         }
     }
 
@@ -101,8 +189,11 @@ class DmsViewModel @JvmOverloads constructor(
         val newState = !_isMonitoring.value
         _isMonitoring.value = newState
         if (!newState) {
+            motionDetector.stopListening()
             alertManager.stopAlert()
             _alertnessState.value = AlertnessState(statusMessage = "Monitoring stopped")
+        } else {
+            motionDetector.startListening()
         }
     }
 
@@ -206,6 +297,46 @@ class DmsViewModel @JvmOverloads constructor(
     }
 
     /**
+     * Toggles motion detection active state, persisting the change if repository is present.
+     */
+    fun toggleMotionDetection() {
+        viewModelScope.launch {
+            if (settingsRepository != null) {
+                settingsRepository.updateSettings { it.copy(isMotionDetectionEnabled = !it.isMotionDetectionEnabled) }
+            } else {
+                val updated = _settings.value.copy(isMotionDetectionEnabled = !_settings.value.isMotionDetectionEnabled)
+                _settings.value = updated
+                motionDetector.settings = updated
+            }
+        }
+    }
+
+    /**
+     * Updates vehicle motion thresholds for acceleration, braking, and crash detection.
+     */
+    fun updateMotionThresholds(accelThreshold: Float, brakingThreshold: Float, crashThresholdG: Float) {
+        viewModelScope.launch {
+            if (settingsRepository != null) {
+                settingsRepository.updateSettings {
+                    it.copy(
+                        rapidAccelThresholdMps2 = accelThreshold,
+                        harshBrakingThresholdMps2 = brakingThreshold,
+                        crashThresholdGForce = crashThresholdG
+                    )
+                }
+            } else {
+                val updated = _settings.value.copy(
+                    rapidAccelThresholdMps2 = accelThreshold,
+                    harshBrakingThresholdMps2 = brakingThreshold,
+                    crashThresholdGForce = crashThresholdG
+                )
+                _settings.value = updated
+                motionDetector.settings = updated
+            }
+        }
+    }
+
+    /**
      * Updates eye openness sensitivity threshold, persisting the change if repository is present.
      *
      * @param threshold EAR threshold below which eyes are classified as closed.
@@ -275,10 +406,11 @@ class DmsViewModel @JvmOverloads constructor(
     }
 
     /**
-     * Releases active alert manager and face analyzer resources when ViewModel is cleared.
+     * Releases active alert manager, motion detector, and face analyzer resources when ViewModel is cleared.
      */
     override fun onCleared() {
         super.onCleared()
+        motionDetector.stopListening()
         alertManager.release()
         faceAnalyzer?.close()
     }

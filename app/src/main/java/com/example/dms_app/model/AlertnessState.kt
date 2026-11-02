@@ -1,7 +1,7 @@
 package com.example.dms_app.model
 
 /**
- * Severity level of driver inattention or drowsiness.
+ * Severity level of driver inattention, drowsiness, or vehicle dynamics anomalies.
  */
 enum class AlertLevel {
     NORMAL,
@@ -9,11 +9,24 @@ enum class AlertLevel {
     CRITICAL_DROWSY,
     WARNING_DISTRACTED,
     CRITICAL_DISTRACTED,
-    FACE_NOT_DETECTED
+    FACE_NOT_DETECTED,
+    HARSH_ACCELERATION,
+    HARSH_BRAKING,
+    CRITICAL_CRASH
 }
 
 /**
- * Driver alertness telemetry and analysis state.
+ * Categorization of physical vehicle motion events detected via accelerometer sensors.
+ */
+enum class MotionEventType {
+    NORMAL,
+    RAPID_ACCELERATION,
+    HARSH_BRAKING,
+    CRASH_DETECTED
+}
+
+/**
+ * Driver alertness telemetry, motion dynamics, and analysis state.
  */
 data class AlertnessState(
     val faceDetected: Boolean = false,
@@ -25,13 +38,18 @@ data class AlertnessState(
     val distractedDurationMs: Long = 0L,
     val alertLevel: AlertLevel = AlertLevel.NORMAL,
     val statusMessage: String = "Monitoring active",
-    val fps: Int = 0
+    val fps: Int = 0,
+    val currentAccelerationMps2: Float = 0f,
+    val currentGForce: Float = 0f,
+    val motionEvent: MotionEventType = MotionEventType.NORMAL
 ) {
     val isAlertTriggered: Boolean
         get() = alertLevel != AlertLevel.NORMAL && alertLevel != AlertLevel.FACE_NOT_DETECTED
 
     val isCritical: Boolean
-        get() = alertLevel == AlertLevel.CRITICAL_DROWSY || alertLevel == AlertLevel.CRITICAL_DISTRACTED
+        get() = alertLevel == AlertLevel.CRITICAL_DROWSY ||
+                alertLevel == AlertLevel.CRITICAL_DISTRACTED ||
+                alertLevel == AlertLevel.CRITICAL_CRASH
 }
 
 /**
@@ -49,5 +67,9 @@ data class DmsSettings(
     val isVibrationEnabled: Boolean = true,
     val isCameraPreviewVisible: Boolean = true,
     val alarmVolume: Int = 100,
-    val alertToneType: Int = 0
+    val alertToneType: Int = 0,
+    val isMotionDetectionEnabled: Boolean = true,
+    val rapidAccelThresholdMps2: Float = 3.0f,
+    val harshBrakingThresholdMps2: Float = 4.0f,
+    val crashThresholdGForce: Float = 3.0f
 )

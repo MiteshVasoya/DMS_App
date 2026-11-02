@@ -5,7 +5,6 @@ import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
-import androidx.core.graphics.toColorInt
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
@@ -19,10 +18,12 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.core.graphics.toColorInt
 import com.example.dms_app.MainActivity
 import com.example.dms_app.R
 import com.example.dms_app.model.AlertLevel
 import com.example.dms_app.model.AlertnessState
+import com.example.dms_app.model.MotionEventType
 import kotlin.math.abs
 
 /**
@@ -40,6 +41,7 @@ class DmsOverlayManager(private val context: Context) {
 
     private var bubbleContainer: FrameLayout? = null
     private var statusIcon: ImageView? = null
+    private var textDmsTitle: TextView? = null
     private var textEyeLeft: TextView? = null
     private var textEyeRight: TextView? = null
     private var badgeDot: View? = null
@@ -55,7 +57,7 @@ class DmsOverlayManager(private val context: Context) {
         }
     }
 
-    @SuppressLint("ClickableViewAccessibility", "InflateParams")
+    @SuppressLint("ClickableViewAccessibility")
     private fun createAndAddOverlay() {
         val layoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
 
@@ -78,6 +80,7 @@ class DmsOverlayManager(private val context: Context) {
 
         bubbleContainer = view.findViewById(R.id.bubble_container)
         statusIcon = view.findViewById(R.id.img_status_icon)
+        textDmsTitle = view.findViewById(R.id.txt_dms_title)
         textEyeLeft = view.findViewById(R.id.txt_eye_left)
         textEyeRight = view.findViewById(R.id.txt_eye_right)
         badgeDot = view.findViewById(R.id.view_badge_dot)
@@ -153,11 +156,20 @@ class DmsOverlayManager(private val context: Context) {
             textEyeLeft?.text = if (leftProb != null) "L:${(leftProb * 100).toInt()}%" else "L:--"
             textEyeRight?.text = if (rightProb != null) "R:${(rightProb * 100).toInt()}%" else "R:--"
 
+            // Display dynamic title if motion event active
+            textDmsTitle?.text = when (state.motionEvent) {
+                MotionEventType.CRASH_DETECTED -> "CRASH!"
+                MotionEventType.HARSH_BRAKING -> "BRAKE!"
+                MotionEventType.RAPID_ACCELERATION -> "ACCEL!"
+                MotionEventType.NORMAL -> "DMS Active"
+            }
+
             val (bgColor, strokeColor, dotColor) = when (state.alertLevel) {
-                AlertLevel.CRITICAL_DROWSY, AlertLevel.CRITICAL_DISTRACTED -> {
+                AlertLevel.CRITICAL_DROWSY, AlertLevel.CRITICAL_DISTRACTED, AlertLevel.CRITICAL_CRASH -> {
                     Triple("#E53935".toColorInt(), "#FFCDD2".toColorInt(), "#FF1744".toColorInt())
                 }
-                AlertLevel.WARNING_DROWSY, AlertLevel.WARNING_DISTRACTED -> {
+                AlertLevel.WARNING_DROWSY, AlertLevel.WARNING_DISTRACTED,
+                AlertLevel.HARSH_BRAKING, AlertLevel.HARSH_ACCELERATION -> {
                     Triple("#FB8C00".toColorInt(), "#FFE0B2".toColorInt(), "#FF9100".toColorInt())
                 }
                 AlertLevel.NORMAL -> {
@@ -182,7 +194,7 @@ class DmsOverlayManager(private val context: Context) {
         pulseAnimator = null
 
         when (level) {
-            AlertLevel.CRITICAL_DROWSY, AlertLevel.CRITICAL_DISTRACTED -> {
+            AlertLevel.CRITICAL_DROWSY, AlertLevel.CRITICAL_DISTRACTED, AlertLevel.CRITICAL_CRASH -> {
                 // Urgent flashing pulse
                 val flashColor = "#B71C1C".toColorInt()
                 pulseAnimator = ValueAnimator.ofObject(ArgbEvaluator(), baseColor, flashColor).apply {
@@ -196,7 +208,8 @@ class DmsOverlayManager(private val context: Context) {
                     start()
                 }
             }
-            AlertLevel.WARNING_DROWSY, AlertLevel.WARNING_DISTRACTED -> {
+            AlertLevel.WARNING_DROWSY, AlertLevel.WARNING_DISTRACTED,
+            AlertLevel.HARSH_BRAKING, AlertLevel.HARSH_ACCELERATION -> {
                 // Caution slow pulse
                 val flashColor = "#E65100".toColorInt()
                 pulseAnimator = ValueAnimator.ofObject(ArgbEvaluator(), baseColor, flashColor).apply {

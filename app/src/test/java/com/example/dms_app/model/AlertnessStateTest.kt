@@ -144,6 +144,30 @@ class AlertnessStateTest {
     }
 
     /**
+     * Verifies that [AlertnessState.isCritical] returns true when [AlertLevel.CRITICAL_CRASH] is set.
+     */
+    @Test
+    fun testIsCriticalReturnsTrueForCriticalCrash() {
+        val state = AlertnessState(alertLevel = AlertLevel.CRITICAL_CRASH)
+        assertTrue(state.isCritical)
+        assertTrue(state.isAlertTriggered)
+    }
+
+    /**
+     * Verifies that motion alerts trigger alert status.
+     */
+    @Test
+    fun testMotionAlertsTriggerAlertState() {
+        val accel = AlertnessState(alertLevel = AlertLevel.HARSH_ACCELERATION)
+        assertTrue(accel.isAlertTriggered)
+        assertFalse(accel.isCritical)
+
+        val brake = AlertnessState(alertLevel = AlertLevel.HARSH_BRAKING)
+        assertTrue(brake.isAlertTriggered)
+        assertFalse(brake.isCritical)
+    }
+
+    /**
      * Verifies that calling [.copy] updates specified telemetry fields while preserving
      * all untouched fields in the returned [AlertnessState] instance.
      */

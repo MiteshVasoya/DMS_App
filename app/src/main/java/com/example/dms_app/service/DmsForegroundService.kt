@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.os.Build
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -19,9 +20,11 @@ import com.example.dms_app.audio.AlertManager
 import com.example.dms_app.data.DmsSettingsRepository
 import com.example.dms_app.data.DmsSettingsRepositoryImpl
 import com.example.dms_app.detection.DmsFaceAnalyzer
+import com.example.dms_app.detection.VehicleMotionDetector
 import com.example.dms_app.model.AlertLevel
 import com.example.dms_app.model.AlertnessState
 import com.example.dms_app.model.DmsSettings
+import com.example.dms_app.model.MotionEventType
 import com.example.dms_app.overlay.DmsOverlayManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,14 +37,15 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 
 /**
- * Foreground Service that keeps CameraX ImageAnalysis and ML Kit Face Detection running
- * even when the driver navigates with Google Maps or Waze.
+ * Foreground Service that keeps CameraX ImageAnalysis, ML Kit Face Detection, and
+ * Vehicle Motion Detection running even when the driver navigates with Google Maps or Waze.
  * Controls the floating overlay bubble and plays audio/vibration alarms.
  */
 class DmsForegroundService : LifecycleService() {
 
     private lateinit var alertManager: AlertManager
     private lateinit var overlayManager: DmsOverlayManager
+    private lateinit var motionDetector: VehicleMotionDetector
     private var faceAnalyzer: DmsFaceAnalyzer? = null
     private val analysisExecutor = Executors.newSingleThreadExecutor()
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -76,10 +80,44 @@ class DmsForegroundService : LifecycleService() {
         faceAnalyzer = DmsFaceAnalyzer(
             settings = DmsSettings(),
             onStateUpdated = { state ->
-                _alertnessState.value = state
-                alertManager.updateAlertLevel(state.alertLevel)
-                overlayManager.updateState(state)
-                updateNotification(state)
+                val currentMotion = _alertnessState.value.motionEvent
+                val resolvedLevel = resolveCombinedAlertLevel(state.alertLevel, currentMotion)
+                val resolvedStatus = resolveCombinedStatusMessage(state.statusMessage, currentMotion)
+                val combined = state.copy(
+                    currentAccelerationMps2 = _alertnessState.value.currentAccelerationMps2,
+                    currentGForce = _alertnessState.value.currentGForce,
+                    motionEvent = currentMotion,
+                    alertLevel = resolvedLevel,
+                    statusMessage = resolvedStatus
+                )
+                _alertnessState.value = combined
+                alertManager.updateAlertLevel(resolvedLevel)
+                overlayManager.updateState(combined)
+                updateNotification(combined)
+            }
+        )
+
+        motionDetector = VehicleMotionDetector(
+            context = applicationContext,
+            settings = DmsSettings(),
+            onMotionReading = { reading ->
+                val currentVisionLevel = when (_alertnessState.value.alertLevel) {
+                    AlertLevel.HARSH_ACCELERATION, AlertLevel.HARSH_BRAKING, AlertLevel.CRITICAL_CRASH -> AlertLevel.NORMAL
+                    else -> _alertnessState.value.alertLevel
+                }
+                val resolvedLevel = resolveCombinedAlertLevel(currentVisionLevel, reading.motionEvent)
+                val resolvedStatus = resolveCombinedStatusMessage(_alertnessState.value.statusMessage, reading.motionEvent)
+                val combined = _alertnessState.value.copy(
+                    currentAccelerationMps2 = reading.accelerationMps2,
+                    currentGForce = reading.gForce,
+                    motionEvent = reading.motionEvent,
+                    alertLevel = resolvedLevel,
+                    statusMessage = resolvedStatus
+                )
+                _alertnessState.value = combined
+                alertManager.updateAlertLevel(resolvedLevel)
+                overlayManager.updateState(combined)
+                updateNotification(combined)
             }
         )
 
@@ -93,6 +131,7 @@ class DmsForegroundService : LifecycleService() {
                     toneType = updatedSettings.alertToneType
                 )
                 faceAnalyzer?.updateSettings(updatedSettings)
+                motionDetector.settings = updatedSettings
             }
         }
 
@@ -104,6 +143,39 @@ class DmsForegroundService : LifecycleService() {
 
         // Initialize CameraX in Service lifecycle
         startCameraMonitoring()
+
+        // Start motion listening
+        motionDetector.startListening()
+    }
+
+    private fun resolveCombinedAlertLevel(visionLevel: AlertLevel, motionEvent: MotionEventType): AlertLevel {
+        return when (motionEvent) {
+            MotionEventType.CRASH_DETECTED -> AlertLevel.CRITICAL_CRASH
+            MotionEventType.HARSH_BRAKING -> {
+                if (visionLevel == AlertLevel.CRITICAL_DROWSY || visionLevel == AlertLevel.CRITICAL_DISTRACTED) {
+                    visionLevel
+                } else {
+                    AlertLevel.HARSH_BRAKING
+                }
+            }
+            MotionEventType.RAPID_ACCELERATION -> {
+                if (visionLevel == AlertLevel.CRITICAL_DROWSY || visionLevel == AlertLevel.CRITICAL_DISTRACTED) {
+                    visionLevel
+                } else {
+                    AlertLevel.HARSH_ACCELERATION
+                }
+            }
+            MotionEventType.NORMAL -> visionLevel
+        }
+    }
+
+    private fun resolveCombinedStatusMessage(visionStatus: String, motionEvent: MotionEventType): String {
+        return when (motionEvent) {
+            MotionEventType.CRASH_DETECTED -> "⚠️ CRASH DETECTED!"
+            MotionEventType.HARSH_BRAKING -> "🛑 Harsh Braking Detected!"
+            MotionEventType.RAPID_ACCELERATION -> "⚡ Rapid Acceleration Detected!"
+            MotionEventType.NORMAL -> visionStatus
+        }
     }
 
     private fun startInForeground() {
@@ -137,7 +209,7 @@ class DmsForegroundService : LifecycleService() {
                     cameraSelector,
                     imageAnalysis
                 )
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Fallback to back camera if front camera is unavailable
                 try {
                     val cameraProvider = cameraProviderFuture.get()
@@ -161,16 +233,18 @@ class DmsForegroundService : LifecycleService() {
     }
 
     private fun createNotificationChannel() {
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Driver Monitoring Active",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Monitors driver alertness and drowsiness in background"
-            setShowBadge(false)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Driver Monitoring Active",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Monitors driver alertness and drowsiness in background"
+                setShowBadge(false)
+            }
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(channel)
         }
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(channel)
     }
 
     private fun buildNotification(state: AlertnessState): Notification {
@@ -195,8 +269,11 @@ class DmsForegroundService : LifecycleService() {
         )
 
         val statusText = when (state.alertLevel) {
+            AlertLevel.CRITICAL_CRASH -> "⚠️ EMERGENCY: Collision / Crash detected!"
             AlertLevel.CRITICAL_DROWSY -> "⚠️ CRITICAL: Drowsiness detected! Wake up!"
             AlertLevel.CRITICAL_DISTRACTED -> "⚠️ Distraction detected! Focus on road!"
+            AlertLevel.HARSH_BRAKING -> "🛑 Harsh braking detected"
+            AlertLevel.HARSH_ACCELERATION -> "⚡ Rapid acceleration detected"
             AlertLevel.WARNING_DROWSY -> "Caution: Eyes closing"
             AlertLevel.WARNING_DISTRACTED -> "Caution: Looking away"
             AlertLevel.NORMAL -> "Driver Alert & Protected"
@@ -234,6 +311,7 @@ class DmsForegroundService : LifecycleService() {
         instance = null
         serviceScope.cancel()
 
+        motionDetector.stopListening()
         overlayManager.removeOverlay()
         alertManager.release()
         faceAnalyzer?.close()
@@ -256,7 +334,11 @@ class DmsForegroundService : LifecycleService() {
 
         fun start(context: Context) {
             val intent = Intent(context, DmsForegroundService::class.java)
-            context.startForegroundService(intent)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
         }
 
         fun stop(context: Context) {

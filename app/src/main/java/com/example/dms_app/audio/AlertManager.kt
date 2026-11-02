@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Handles audio tones and haptic vibration feedback
- * for normal driver warnings and critical alerts.
+ * for normal driver warnings, vehicle dynamics alerts, and critical impact/crash alerts.
  */
 open class AlertManager(private val context: Context?) {
 
@@ -115,7 +115,13 @@ open class AlertManager(private val context: Context?) {
             AlertLevel.WARNING_DROWSY, AlertLevel.WARNING_DISTRACTED -> {
                 startPulsingAlert(pulseIntervalMs = 500L, toneDurationMs = 250, critical = false)
             }
-            AlertLevel.CRITICAL_DROWSY, AlertLevel.CRITICAL_DISTRACTED -> {
+            AlertLevel.HARSH_ACCELERATION -> {
+                startPulsingAlert(pulseIntervalMs = 400L, toneDurationMs = 200, critical = false)
+            }
+            AlertLevel.HARSH_BRAKING -> {
+                startPulsingAlert(pulseIntervalMs = 300L, toneDurationMs = 180, critical = false)
+            }
+            AlertLevel.CRITICAL_DROWSY, AlertLevel.CRITICAL_DISTRACTED, AlertLevel.CRITICAL_CRASH -> {
                 startPulsingAlert(pulseIntervalMs = 200L, toneDurationMs = 150, critical = true)
             }
         }

@@ -163,13 +163,15 @@ private fun DmsDashboard(
     val infiniteTransition = rememberInfiniteTransition(label = "AlertPulse")
     val pulsingAlpha by infiniteTransition.animateColor(
         initialValue = when (alertnessState.alertLevel) {
-            AlertLevel.CRITICAL_DROWSY, AlertLevel.CRITICAL_DISTRACTED -> Color.Red.copy(alpha = 0.75f)
-            AlertLevel.WARNING_DROWSY, AlertLevel.WARNING_DISTRACTED -> Color(0xFFFFA000).copy(alpha = 0.55f)
+            AlertLevel.CRITICAL_DROWSY, AlertLevel.CRITICAL_DISTRACTED, AlertLevel.CRITICAL_CRASH -> Color.Red.copy(alpha = 0.75f)
+            AlertLevel.WARNING_DROWSY, AlertLevel.WARNING_DISTRACTED,
+            AlertLevel.HARSH_BRAKING, AlertLevel.HARSH_ACCELERATION -> Color(0xFFFFA000).copy(alpha = 0.55f)
             else -> Color.Transparent
         },
         targetValue = when (alertnessState.alertLevel) {
-            AlertLevel.CRITICAL_DROWSY, AlertLevel.CRITICAL_DISTRACTED -> Color.Red.copy(alpha = 0.15f)
-            AlertLevel.WARNING_DROWSY, AlertLevel.WARNING_DISTRACTED -> Color(0xFFFFA000).copy(alpha = 0.10f)
+            AlertLevel.CRITICAL_DROWSY, AlertLevel.CRITICAL_DISTRACTED, AlertLevel.CRITICAL_CRASH -> Color.Red.copy(alpha = 0.15f)
+            AlertLevel.WARNING_DROWSY, AlertLevel.WARNING_DISTRACTED,
+            AlertLevel.HARSH_BRAKING, AlertLevel.HARSH_ACCELERATION -> Color(0xFFFFA000).copy(alpha = 0.10f)
             else -> Color.Transparent
         },
         animationSpec = infiniteRepeatable(
@@ -289,7 +291,9 @@ private fun DmsDashboard(
                 onDrowsyThresholdsChanged = { warn, crit -> viewModel.updateDrowsyThresholds(warn, crit) },
                 onAlarmVolumeChanged = { viewModel.updateAlarmVolume(it) },
                 onAlertToneTypeChanged = { viewModel.updateAlertToneType(it) },
-                onDistractionAnglesChanged = { yaw, pitch -> viewModel.updateDistractionAngleThresholds(yaw, pitch) }
+                onDistractionAnglesChanged = { yaw, pitch -> viewModel.updateDistractionAngleThresholds(yaw, pitch) },
+                onToggleMotionDetection = { viewModel.toggleMotionDetection() },
+                onMotionThresholdsChanged = { accel, brake, crash -> viewModel.updateMotionThresholds(accel, brake, crash) }
             )
         }
     }
@@ -304,7 +308,9 @@ private fun TopStatusBanner(
         !isMonitoring -> Color(0xFF424242)
         alertnessState.isCritical -> Color(0xFFD32F2F)
         alertnessState.alertLevel == AlertLevel.WARNING_DROWSY ||
-                alertnessState.alertLevel == AlertLevel.WARNING_DISTRACTED -> Color(0xFFF57C00)
+                alertnessState.alertLevel == AlertLevel.WARNING_DISTRACTED ||
+                alertnessState.alertLevel == AlertLevel.HARSH_BRAKING ||
+                alertnessState.alertLevel == AlertLevel.HARSH_ACCELERATION -> Color(0xFFF57C00)
         !alertnessState.faceDetected -> Color(0xFF616161)
         else -> Color(0xFF2E7D32)
     }
@@ -409,6 +415,22 @@ private fun TelemetryHud(
                 Text(
                     text = yawText,
                     color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            // G-Force / Linear Acceleration
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "G-Force",
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 11.sp
+                )
+                val gText = "${alertnessState.currentGForce.format(2)}g"
+                Text(
+                    text = gText,
+                    color = if (alertnessState.currentGForce > 0.4f) Color(0xFFFF9100) else Color.White,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -587,7 +609,9 @@ private fun DmsSettingsDialog(
     onDrowsyThresholdsChanged: (Long, Long) -> Unit,
     onAlarmVolumeChanged: (Int) -> Unit = {},
     onAlertToneTypeChanged: (Int) -> Unit = {},
-    onDistractionAnglesChanged: (Float, Float) -> Unit = { _, _ -> }
+    onDistractionAnglesChanged: (Float, Float) -> Unit = { _, _ -> },
+    onToggleMotionDetection: () -> Unit = {},
+    onMotionThresholdsChanged: (Float, Float, Float) -> Unit = { _, _, _ -> }
 ) {
     var eyeThreshold by remember { mutableFloatStateOf(settings.eyeOpenThreshold) }
     var warnDurationSec by remember { mutableFloatStateOf(settings.drowsyWarningDurationMs / 1000f) }
@@ -595,6 +619,10 @@ private fun DmsSettingsDialog(
     var alertToneType by remember { mutableIntStateOf(settings.alertToneType) }
     var yawThreshold by remember { mutableFloatStateOf(settings.yawThresholdDegrees) }
     var pitchThreshold by remember { mutableFloatStateOf(settings.pitchThresholdDegrees) }
+    var isMotionEnabled by remember { mutableStateOf(settings.isMotionDetectionEnabled) }
+    var accelThreshold by remember { mutableFloatStateOf(settings.rapidAccelThresholdMps2) }
+    var brakeThreshold by remember { mutableFloatStateOf(settings.harshBrakingThresholdMps2) }
+    var crashThresholdG by remember { mutableFloatStateOf(settings.crashThresholdGForce) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -748,6 +776,75 @@ private fun DmsSettingsDialog(
                         valueRange = 10f..35f
                     )
                 }
+
+                // Vehicle Motion & Crash Detection Toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = "Motion & Crash Detection", fontWeight = FontWeight.Medium)
+                        Text(
+                            text = "Track harsh braking, rapid acceleration, and severe collision impacts via accelerometer.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Button(
+                        onClick = {
+                            isMotionEnabled = !isMotionEnabled
+                            onToggleMotionDetection()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isMotionEnabled) Color(0xFF2E7D32) else Color.DarkGray
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(if (isMotionEnabled) "On" else "Off")
+                    }
+                }
+
+                if (isMotionEnabled) {
+                    // Rapid Acceleration Threshold
+                    Column {
+                        Text(
+                            text = "Rapid Accel Threshold: ${accelThreshold.format(1)} m/s² (~${(accelThreshold / 9.8f).format(2)}g)",
+                            fontWeight = FontWeight.Medium
+                        )
+                        Slider(
+                            value = accelThreshold,
+                            onValueChange = { accelThreshold = it },
+                            valueRange = 1.5f..6.0f
+                        )
+                    }
+
+                    // Harsh Braking Threshold
+                    Column {
+                        Text(
+                            text = "Harsh Braking Threshold: ${brakeThreshold.format(1)} m/s² (~${(brakeThreshold / 9.8f).format(2)}g)",
+                            fontWeight = FontWeight.Medium
+                        )
+                        Slider(
+                            value = brakeThreshold,
+                            onValueChange = { brakeThreshold = it },
+                            valueRange = 2.0f..8.0f
+                        )
+                    }
+
+                    // Crash Threshold
+                    Column {
+                        Text(
+                            text = "Crash Impact Threshold: ${crashThresholdG.format(1)}g",
+                            fontWeight = FontWeight.Medium
+                        )
+                        Slider(
+                            value = crashThresholdG,
+                            onValueChange = { crashThresholdG = it },
+                            valueRange = 1.5f..6.0f
+                        )
+                    }
+                }
             }
         },
         confirmButton = {
@@ -760,6 +857,7 @@ private fun DmsSettingsDialog(
                     onAlarmVolumeChanged(alarmVolume.toInt())
                     onAlertToneTypeChanged(alertToneType)
                     onDistractionAnglesChanged(yawThreshold, pitchThreshold)
+                    onMotionThresholdsChanged(accelThreshold, brakeThreshold, crashThresholdG)
                     onDismiss()
                 }
             ) {
