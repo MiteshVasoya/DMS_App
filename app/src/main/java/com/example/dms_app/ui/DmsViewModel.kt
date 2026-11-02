@@ -84,8 +84,10 @@ class DmsViewModel @JvmOverloads constructor(
         viewModelScope.launch {
             settings.collect { updatedSettings ->
                 alertManager.updateSettings(
-                    updatedSettings.isAudioEnabled,
-                    updatedSettings.isVibrationEnabled
+                    audioEnabled = updatedSettings.isAudioEnabled,
+                    vibrationEnabled = updatedSettings.isVibrationEnabled,
+                    volume = updatedSettings.alarmVolume,
+                    toneType = updatedSettings.alertToneType
                 )
                 faceAnalyzer?.updateSettings(updatedSettings)
             }
@@ -114,7 +116,12 @@ class DmsViewModel @JvmOverloads constructor(
             } else {
                 val updated = _settings.value.copy(isAudioEnabled = !_settings.value.isAudioEnabled)
                 _settings.value = updated
-                alertManager.updateSettings(updated.isAudioEnabled, updated.isVibrationEnabled)
+                alertManager.updateSettings(
+                    audioEnabled = updated.isAudioEnabled,
+                    vibrationEnabled = updated.isVibrationEnabled,
+                    volume = updated.alarmVolume,
+                    toneType = updated.alertToneType
+                )
                 faceAnalyzer?.updateSettings(updated)
             }
         }
@@ -130,8 +137,57 @@ class DmsViewModel @JvmOverloads constructor(
             } else {
                 val updated = _settings.value.copy(isVibrationEnabled = !_settings.value.isVibrationEnabled)
                 _settings.value = updated
-                alertManager.updateSettings(updated.isAudioEnabled, updated.isVibrationEnabled)
+                alertManager.updateSettings(
+                    audioEnabled = updated.isAudioEnabled,
+                    vibrationEnabled = updated.isVibrationEnabled,
+                    volume = updated.alarmVolume,
+                    toneType = updated.alertToneType
+                )
                 faceAnalyzer?.updateSettings(updated)
+            }
+        }
+    }
+
+    /**
+     * Updates the driver alert hardware volume level.
+     *
+     * @param volume Target alarm stream volume percentage (0 to 100).
+     */
+    fun updateAlarmVolume(volume: Int) {
+        viewModelScope.launch {
+            if (settingsRepository != null) {
+                settingsRepository.updateSettings { it.copy(alarmVolume = volume.coerceIn(0, 100)) }
+            } else {
+                val updated = _settings.value.copy(alarmVolume = volume.coerceIn(0, 100))
+                _settings.value = updated
+                alertManager.updateSettings(
+                    audioEnabled = updated.isAudioEnabled,
+                    vibrationEnabled = updated.isVibrationEnabled,
+                    volume = updated.alarmVolume,
+                    toneType = updated.alertToneType
+                )
+            }
+        }
+    }
+
+    /**
+     * Updates the driver alert tone effect style.
+     *
+     * @param toneType Tone generator sound effect selection index.
+     */
+    fun updateAlertToneType(toneType: Int) {
+        viewModelScope.launch {
+            if (settingsRepository != null) {
+                settingsRepository.updateSettings { it.copy(alertToneType = toneType) }
+            } else {
+                val updated = _settings.value.copy(alertToneType = toneType)
+                _settings.value = updated
+                alertManager.updateSettings(
+                    audioEnabled = updated.isAudioEnabled,
+                    vibrationEnabled = updated.isVibrationEnabled,
+                    volume = updated.alarmVolume,
+                    toneType = updated.alertToneType
+                )
             }
         }
     }

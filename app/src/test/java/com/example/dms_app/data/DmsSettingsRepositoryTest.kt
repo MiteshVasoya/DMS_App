@@ -98,6 +98,18 @@ class DmsSettingsRepositoryTest {
     }
 
     /**
+     * Verifies that updating volume and tone type persists to DataStore.
+     */
+    @Test
+    fun testUpdateAlarmVolumeAndToneTypePersistsValues() = runTest {
+        repository.updateSettings {
+            it.copy(alarmVolume = 65, alertToneType = 2)
+        }
+        val updated = repository.settingsFlow.first()
+        assertEquals(65, updated.alarmVolume)
+        assertEquals(2, updated.alertToneType)
+    }
+    /**
      * Verifies that toggling feature flags (audio, vibration, preview) persists state.
      */
     @Test
