@@ -77,6 +77,8 @@ import com.example.dms_app.model.AlertnessState
 import com.example.dms_app.model.DmsSettings
 import com.example.dms_app.service.DmsForegroundService
 import com.example.dms_app.ui.components.DmsCameraPreview
+import androidx.compose.ui.tooling.preview.Preview
+import com.example.dms_app.ui.theme.DMS_AppTheme
 import java.util.Locale
 
 @Composable
@@ -692,3 +694,94 @@ private fun CameraPermissionRationale(
 
 private fun Double.format(digits: Int): String = String.format(Locale.US, "%.${digits}f", this)
 private fun Float.format(digits: Int): String = String.format(Locale.US, "%.${digits}f", this)
+
+/**
+ * Compose visual preview for the normal state alertness banner.
+ */
+@Preview(showBackground = true, name = "Normal Alertness HUD")
+@Composable
+private fun PreviewTopStatusBannerNormal() {
+    DMS_AppTheme {
+        TopStatusBanner(
+            alertnessState = AlertnessState(
+                faceDetected = true,
+                alertLevel = AlertLevel.NORMAL,
+                statusMessage = "Driver Alert & Protected",
+                fps = 30
+            ),
+            isMonitoring = true
+        )
+    }
+}
+
+/**
+ * Compose visual preview for the warning level drowsiness alert banner.
+ */
+@Preview(showBackground = true, name = "Drowsy Warning Alert HUD")
+@Composable
+private fun PreviewTopStatusBannerWarning() {
+    DMS_AppTheme {
+        TopStatusBanner(
+            alertnessState = AlertnessState(
+                faceDetected = true,
+                alertLevel = AlertLevel.WARNING_DROWSY,
+                statusMessage = "Caution: Eyes closing",
+                eyeClosedDurationMs = 1200L,
+                fps = 28
+            ),
+            isMonitoring = true
+        )
+    }
+}
+
+/**
+ * Compose visual preview for the real-time driver telemetry HUD.
+ */
+@Preview(showBackground = true, name = "Telemetry HUD Preview")
+@Composable
+private fun PreviewTelemetryHud() {
+    DMS_AppTheme {
+        TelemetryHud(
+            alertnessState = AlertnessState(
+                faceDetected = true,
+                leftEyeOpenProb = 0.92f,
+                rightEyeOpenProb = 0.88f,
+                headEulerAngleY = -5.0f
+            ),
+            isMonitoring = true
+        )
+    }
+}
+
+/**
+ * Compose visual preview for the bottom floating controls bar.
+ */
+@Preview(showBackground = true, name = "Bottom Controls Bar Preview")
+@Composable
+private fun PreviewBottomControlsBar() {
+    DMS_AppTheme {
+        BottomControlsBar(
+            isMonitoring = true,
+            isAudioEnabled = true,
+            isVibrationEnabled = true,
+            isCameraPreviewVisible = true,
+            onToggleMonitoring = {},
+            onToggleCameraPreview = {},
+            onLaunchFloatingBubble = {},
+            onToggleAudio = {},
+            onToggleVibration = {},
+            onOpenSettings = {}
+        )
+    }
+}
+
+/**
+ * Compose visual preview for the camera permission rationale screen.
+ */
+@Preview(showBackground = true, name = "Camera Permission Rationale Preview")
+@Composable
+private fun PreviewCameraPermissionRationale() {
+    DMS_AppTheme {
+        CameraPermissionRationale(onRequestPermission = {})
+    }
+}
