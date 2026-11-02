@@ -210,5 +210,16 @@ class DmsViewModelTest {
         testScheduler.advanceUntilIdle()
         assertEquals(2, viewModel.settings.value.alertToneType)
     }
+
+    /**
+     * Verifies that updating distraction angle thresholds updates state and propagates to repository.
+     */
+    @Test
+    fun testUpdateDistractionAngleThresholdsModifiesSettings() = runTest {
+        viewModel.updateDistractionAngleThresholds(35f, 25f)
+        testScheduler.advanceUntilIdle()
+        assertEquals(35f, viewModel.settings.value.yawThresholdDegrees)
+        assertEquals(25f, viewModel.settings.value.pitchThresholdDegrees)
+    }
 }
 
