@@ -81,18 +81,27 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.example.dms_app.ui.theme.DMS_AppTheme
 import java.util.Locale
 
+/**
+ * Main screen composable for the Driver Monitoring System.
+ * Handles permission checking, camera initialization, HUD rendering, and settings dialog.
+ *
+ * @param modifier Optional [Modifier] for layout adjustments.
+ * @param viewModel Primary [DmsViewModel] instance managing alertness state and settings.
+ * @param initialCameraPermission Optional pre-determined camera permission flag for UI testing.
+ */
 @Composable
 fun DmsScreen(
     modifier: Modifier = Modifier,
-    viewModel: DmsViewModel = viewModel()
+    viewModel: DmsViewModel = viewModel(),
+    initialCameraPermission: Boolean? = null
 ) {
     val context = LocalContext.current
     var hasCameraPermission by remember {
         mutableStateOf(
-            ContextCompat.checkSelfPermission(
+            initialCameraPermission ?: (ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.CAMERA
-            ) == PackageManager.PERMISSION_GRANTED
+            ) == PackageManager.PERMISSION_GRANTED)
         )
     }
 
@@ -103,7 +112,7 @@ fun DmsScreen(
     }
 
     LaunchedEffect(Unit) {
-        if (!hasCameraPermission) {
+        if (!hasCameraPermission && initialCameraPermission == null) {
             permissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
