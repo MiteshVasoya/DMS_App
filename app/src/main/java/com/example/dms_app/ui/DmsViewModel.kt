@@ -249,6 +249,32 @@ class DmsViewModel @JvmOverloads constructor(
     }
 
     /**
+     * Updates head pose distraction yaw and pitch angle sensitivity thresholds.
+     *
+     * @param yawThreshold Head rotation angle threshold in degrees triggering distraction alert.
+     * @param pitchThreshold Head tilt angle threshold in degrees triggering distraction alert.
+     */
+    fun updateDistractionAngleThresholds(yawThreshold: Float, pitchThreshold: Float) {
+        viewModelScope.launch {
+            if (settingsRepository != null) {
+                settingsRepository.updateSettings {
+                    it.copy(
+                        yawThresholdDegrees = yawThreshold,
+                        pitchThresholdDegrees = pitchThreshold
+                    )
+                }
+            } else {
+                val updated = _settings.value.copy(
+                    yawThresholdDegrees = yawThreshold,
+                    pitchThresholdDegrees = pitchThreshold
+                )
+                _settings.value = updated
+                faceAnalyzer?.updateSettings(updated)
+            }
+        }
+    }
+
+    /**
      * Releases active alert manager and face analyzer resources when ViewModel is cleared.
      */
     override fun onCleared() {

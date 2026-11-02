@@ -26,8 +26,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Notifications
@@ -286,7 +288,8 @@ private fun DmsDashboard(
                 onEyeSensitivityChanged = { viewModel.updateEyeSensitivity(it) },
                 onDrowsyThresholdsChanged = { warn, crit -> viewModel.updateDrowsyThresholds(warn, crit) },
                 onAlarmVolumeChanged = { viewModel.updateAlarmVolume(it) },
-                onAlertToneTypeChanged = { viewModel.updateAlertToneType(it) }
+                onAlertToneTypeChanged = { viewModel.updateAlertToneType(it) },
+                onDistractionAnglesChanged = { yaw, pitch -> viewModel.updateDistractionAngleThresholds(yaw, pitch) }
             )
         }
     }
@@ -572,6 +575,7 @@ private fun BottomControlsBar(
  * @param onDrowsyThresholdsChanged Callback invoked with updated warning and critical durations.
  * @param onAlarmVolumeChanged Callback invoked when hardware alarm stream volume is adjusted.
  * @param onAlertToneTypeChanged Callback invoked when driver selects an alternate alert sound effect.
+ * @param onDistractionAnglesChanged Callback invoked with updated head pose yaw and pitch angle thresholds.
  */
 @Composable
 private fun DmsSettingsDialog(
@@ -582,18 +586,25 @@ private fun DmsSettingsDialog(
     onEyeSensitivityChanged: (Float) -> Unit,
     onDrowsyThresholdsChanged: (Long, Long) -> Unit,
     onAlarmVolumeChanged: (Int) -> Unit = {},
-    onAlertToneTypeChanged: (Int) -> Unit = {}
+    onAlertToneTypeChanged: (Int) -> Unit = {},
+    onDistractionAnglesChanged: (Float, Float) -> Unit = { _, _ -> }
 ) {
     var eyeThreshold by remember { mutableFloatStateOf(settings.eyeOpenThreshold) }
     var warnDurationSec by remember { mutableFloatStateOf(settings.drowsyWarningDurationMs / 1000f) }
     var alarmVolume by remember { mutableFloatStateOf(settings.alarmVolume.toFloat()) }
     var alertToneType by remember { mutableIntStateOf(settings.alertToneType) }
+    var yawThreshold by remember { mutableFloatStateOf(settings.yawThresholdDegrees) }
+    var pitchThreshold by remember { mutableFloatStateOf(settings.pitchThresholdDegrees) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("DMS Settings") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            val scrollState = rememberScrollState()
+            Column(
+                modifier = Modifier.verticalScroll(scrollState),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
                 // Battery saver switch
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -701,6 +712,42 @@ private fun DmsSettingsDialog(
                         valueRange = 0.6f..2.5f
                     )
                 }
+
+                // Head Yaw (Looking Away) slider
+                Column {
+                    Text(
+                        text = "Looking Away Sensitivity: ${yawThreshold.toInt()}°",
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Head rotation angle before distraction alert triggers.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Slider(
+                        value = yawThreshold,
+                        onValueChange = { yawThreshold = it },
+                        valueRange = 15f..45f
+                    )
+                }
+
+                // Head Pitch (Looking Down/Phone) slider
+                Column {
+                    Text(
+                        text = "Looking Down Sensitivity: ${pitchThreshold.toInt()}°",
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Head downward tilt angle (e.g. looking at phone).",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Slider(
+                        value = pitchThreshold,
+                        onValueChange = { pitchThreshold = it },
+                        valueRange = 10f..35f
+                    )
+                }
             }
         },
         confirmButton = {
@@ -712,6 +759,7 @@ private fun DmsSettingsDialog(
                     onDrowsyThresholdsChanged(warnMs, critMs)
                     onAlarmVolumeChanged(alarmVolume.toInt())
                     onAlertToneTypeChanged(alertToneType)
+                    onDistractionAnglesChanged(yawThreshold, pitchThreshold)
                     onDismiss()
                 }
             ) {

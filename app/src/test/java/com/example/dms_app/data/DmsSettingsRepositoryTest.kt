@@ -98,6 +98,18 @@ class DmsSettingsRepositoryTest {
     }
 
     /**
+     * Verifies that updating distraction angle thresholds persists yaw and pitch values.
+     */
+    @Test
+    fun testUpdateDistractionAngleThresholdsPersistsValues() = runTest {
+        repository.updateSettings {
+            it.copy(yawThresholdDegrees = 32f, pitchThresholdDegrees = 22f)
+        }
+        val updated = repository.settingsFlow.first()
+        assertEquals(32f, updated.yawThresholdDegrees)
+        assertEquals(22f, updated.pitchThresholdDegrees)
+    }
+    /**
      * Verifies that updating volume and tone type persists to DataStore.
      */
     @Test
