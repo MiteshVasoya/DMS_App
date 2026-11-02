@@ -1,6 +1,8 @@
 package com.example.dms_app.audio
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.VibrationEffect
@@ -25,7 +27,6 @@ open class AlertManager(private val context: Context?) {
     private var currentLevel: AlertLevel = AlertLevel.NORMAL
     val currentAlertLevel: AlertLevel
         get() = currentLevel
-
     /**
      * Indicates whether audio tone alarms are enabled.
      */
@@ -42,7 +43,19 @@ open class AlertManager(private val context: Context?) {
     var alertToneType: Int = 0
         private set
 
+    /**
+     * Internal tracking of whether audio focus has been requested from AudioManager.
+     */
+    var hasAudioFocus: Boolean = false
+        private set
+
     private var toneGenerator: ToneGenerator? = null
+
+    private var audioFocusRequest: AudioFocusRequest? = null
+
+    private val audioManager: AudioManager? by lazy {
+        context?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    }
 
     private val vibrator: Vibrator? by lazy {
         val vibratorManager = context?.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
@@ -128,6 +141,7 @@ open class AlertManager(private val context: Context?) {
     }
 
     private fun startPulsingAlert(pulseIntervalMs: Long, toneDurationMs: Int, critical: Boolean) {
+        requestAudioFocus(critical = critical)
         alertJob?.cancel()
         alertJob = scope.launch {
             while (isActive) {
@@ -139,6 +153,54 @@ open class AlertManager(private val context: Context?) {
                 }
                 delay(pulseIntervalMs)
             }
+        }
+    }
+
+    /**
+     * Requests transient audio focus so external media (e.g. Spotify, Maps) ducks or pauses during alarms.
+     *
+     * @param critical If true, requests exclusive transient focus; otherwise requests transient focus with ducking.
+     */
+    private fun requestAudioFocus(critical: Boolean) {
+        if (!isAudioEnabled) return
+        val am = audioManager ?: return
+        try {
+            val focusGain = if (critical) {
+                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
+            } else {
+                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+            }
+
+            val playbackAttributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ALARM)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+
+            val request = AudioFocusRequest.Builder(focusGain)
+                .setAudioAttributes(playbackAttributes)
+                .setAcceptsDelayedFocusGain(false)
+                .setOnAudioFocusChangeListener { /* Handle focus changes if needed */ }
+                .build()
+
+            audioFocusRequest = request
+            val res = am.requestAudioFocus(request)
+            hasAudioFocus = (res == AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
+        } catch (_: Throwable) {
+            // Audio focus fallback in unit test / headless mock environments
+        }
+    }
+
+    /**
+     * Abandons active audio focus to restore original volume for background media applications.
+     */
+    private fun abandonAudioFocus() {
+        val am = audioManager ?: return
+        val request = audioFocusRequest ?: return
+        try {
+            am.abandonAudioFocusRequest(request)
+            audioFocusRequest = null
+            hasAudioFocus = false
+        } catch (_: Throwable) {
         }
     }
 
@@ -171,6 +233,8 @@ open class AlertManager(private val context: Context?) {
             toneGenerator?.stopTone()
             vibrator?.cancel()
         } catch (_: Exception) {
+        } finally {
+            abandonAudioFocus()
         }
     }
 

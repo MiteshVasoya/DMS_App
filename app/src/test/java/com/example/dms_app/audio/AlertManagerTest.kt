@@ -109,5 +109,16 @@ class AlertManagerTest {
 
         alertManager.release()
         alertManager.stopAlert()
+        assertFalse(alertManager.hasAudioFocus)
+    }
+
+    /**
+     * Verifies that stopping alerts clears active audio focus.
+     */
+    @Test
+    fun testStopAlertClearsAudioFocus() {
+        alertManager.updateAlertLevel(AlertLevel.CRITICAL_DROWSY)
+        alertManager.stopAlert()
+        assertFalse(alertManager.hasAudioFocus)
     }
 }
