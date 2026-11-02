@@ -12,6 +12,7 @@ composeBom = "2026.02.01"
 camerax = "1.4.1"
 mlkitFaceDetection = "16.1.7"
 materialIconsExtended = "1.7.8"
+kotlinxCoroutines = "1.11.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -39,6 +40,9 @@ androidx-camera-view = { group = "androidx.camera", name = "camera-view", versio
 
 # ML Kit Face Detection (bundled)
 mlkit-face-detection = { group = "com.google.mlkit", name = "face-detection", version.ref = "mlkitFaceDetection" }
+
+# Coroutines Testing
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

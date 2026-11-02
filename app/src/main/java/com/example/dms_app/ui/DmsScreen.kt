@@ -171,9 +171,9 @@ private fun DmsDashboard(
             .background(Color.Black)
     ) {
         // 1. Live Camera Preview or Black Screen (to avoid distraction and battery drain)
-        if (isMonitoring) {
+        if (isMonitoring && viewModel.faceAnalyzer != null) {
             DmsCameraPreview(
-                analyzer = viewModel.faceAnalyzer,
+                analyzer = viewModel.faceAnalyzer!!,
                 isPreviewVisible = settings.isCameraPreviewVisible,
                 modifier = Modifier.fillMaxSize()
             )

@@ -16,9 +16,11 @@ import kotlinx.coroutines.flow.update
  * ViewModel managing driver alertness telemetry, configuration settings,
  * audio/haptic alert lifecycle, and monitoring state.
  */
-class DmsViewModel(application: Application) : AndroidViewModel(application) {
-
-    private val alertManager = AlertManager(application.applicationContext)
+class DmsViewModel @JvmOverloads constructor(
+    application: Application? = null,
+    private val alertManager: AlertManager = AlertManager(application?.applicationContext),
+    customFaceAnalyzer: DmsFaceAnalyzer? = null
+) : AndroidViewModel(application ?: Application()) {
 
     private val _settings = MutableStateFlow(DmsSettings())
     val settings: StateFlow<DmsSettings> = _settings.asStateFlow()
@@ -29,18 +31,23 @@ class DmsViewModel(application: Application) : AndroidViewModel(application) {
     private val _alertnessState = MutableStateFlow(AlertnessState())
     val alertnessState: StateFlow<AlertnessState> = _alertnessState.asStateFlow()
 
-    val faceAnalyzer = DmsFaceAnalyzer(
-        settings = _settings.value,
-        onStateUpdated = { newState ->
-            if (_isMonitoring.value) {
-                _alertnessState.value = newState
-                alertManager.updateAlertLevel(newState.alertLevel)
-            } else {
-                _alertnessState.value = AlertnessState(statusMessage = "Monitoring paused")
-                alertManager.updateAlertLevel(AlertLevel.NORMAL)
+    val faceAnalyzer: DmsFaceAnalyzer? = customFaceAnalyzer ?: try {
+        DmsFaceAnalyzer(
+            settings = _settings.value,
+            onStateUpdated = { newState ->
+                if (_isMonitoring.value) {
+                    _alertnessState.value = newState
+                    alertManager.updateAlertLevel(newState.alertLevel)
+                } else {
+                    _alertnessState.value = AlertnessState(statusMessage = "Monitoring paused")
+                    alertManager.updateAlertLevel(AlertLevel.NORMAL)
+                }
             }
-        }
-    )
+        )
+    } catch (_: Throwable) {
+        // Fallback for headless JVM unit tests where MlKitContext is not initialized
+        null
+    }
 
     fun toggleMonitoring() {
         val newState = !_isMonitoring.value
@@ -55,7 +62,7 @@ class DmsViewModel(application: Application) : AndroidViewModel(application) {
         _settings.update { current ->
             val updated = current.copy(isAudioEnabled = !current.isAudioEnabled)
             alertManager.updateSettings(updated.isAudioEnabled, updated.isVibrationEnabled)
-            faceAnalyzer.updateSettings(updated)
+            faceAnalyzer?.updateSettings(updated)
             updated
         }
     }
@@ -64,7 +71,7 @@ class DmsViewModel(application: Application) : AndroidViewModel(application) {
         _settings.update { current ->
             val updated = current.copy(isVibrationEnabled = !current.isVibrationEnabled)
             alertManager.updateSettings(updated.isAudioEnabled, updated.isVibrationEnabled)
-            faceAnalyzer.updateSettings(updated)
+            faceAnalyzer?.updateSettings(updated)
             updated
         }
     }
@@ -78,7 +85,7 @@ class DmsViewModel(application: Application) : AndroidViewModel(application) {
     fun updateEyeSensitivity(threshold: Float) {
         _settings.update { current ->
             val updated = current.copy(eyeOpenThreshold = threshold)
-            faceAnalyzer.updateSettings(updated)
+            faceAnalyzer?.updateSettings(updated)
             updated
         }
     }
@@ -89,7 +96,7 @@ class DmsViewModel(application: Application) : AndroidViewModel(application) {
                 drowsyWarningDurationMs = warningMs,
                 drowsyCriticalDurationMs = criticalMs
             )
-            faceAnalyzer.updateSettings(updated)
+            faceAnalyzer?.updateSettings(updated)
             updated
         }
     }
@@ -97,6 +104,6 @@ class DmsViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         super.onCleared()
         alertManager.release()
-        faceAnalyzer.close()
+        faceAnalyzer?.close()
     }
 }

@@ -18,7 +18,7 @@ import kotlinx.coroutines.launch
  * Handles audio tones and haptic vibration feedback
  * for normal driver warnings and critical alerts.
  */
-class AlertManager(private val context: Context) {
+open class AlertManager(private val context: Context?) {
 
     private val scope = CoroutineScope(Dispatchers.Default)
     private var alertJob: Job? = null
@@ -29,19 +29,19 @@ class AlertManager(private val context: Context) {
     private var toneGenerator: ToneGenerator? = null
 
     private val vibrator: Vibrator? by lazy {
-        val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+        val vibratorManager = context?.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
         vibratorManager?.defaultVibrator
     }
 
     init {
         try {
             toneGenerator = ToneGenerator(AudioManager.STREAM_ALARM, 100)
-        } catch (_: Exception) {
-            // ToneGenerator init fallback
+        } catch (_: Throwable) {
+            // ToneGenerator init fallback in unit test / headless environments
         }
     }
 
-    fun updateSettings(audioEnabled: Boolean, vibrationEnabled: Boolean) {
+    open fun updateSettings(audioEnabled: Boolean, vibrationEnabled: Boolean) {
         isAudioEnabled = audioEnabled
         isVibrationEnabled = vibrationEnabled
         if (!audioEnabled && !vibrationEnabled) {
@@ -49,7 +49,7 @@ class AlertManager(private val context: Context) {
         }
     }
 
-    fun updateAlertLevel(level: AlertLevel) {
+    open fun updateAlertLevel(level: AlertLevel) {
         if (level == currentLevel) return
         currentLevel = level
 
@@ -102,7 +102,7 @@ class AlertManager(private val context: Context) {
         }
     }
 
-    fun stopAlert() {
+    open fun stopAlert() {
         alertJob?.cancel()
         alertJob = null
         try {
@@ -112,7 +112,7 @@ class AlertManager(private val context: Context) {
         }
     }
 
-    fun release() {
+    open fun release() {
         stopAlert()
         try {
             toneGenerator?.release()
