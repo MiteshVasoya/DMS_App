@@ -49,6 +49,24 @@ class DmsOverlayManager(private val context: Context) {
     private var pulseAnimator: ValueAnimator? = null
     private var currentAlertLevel: AlertLevel = AlertLevel.NORMAL
 
+    /**
+     * Active alert level currently displayed by the overlay bubble.
+     */
+    val activeAlertLevel: AlertLevel
+        get() = currentAlertLevel
+
+    /**
+     * Whether the pulsing alert animation is currently running.
+     */
+    val isPulsing: Boolean
+        get() = pulseAnimator?.isRunning == true
+
+    /**
+     * Whether the overlay view is currently added to WindowManager.
+     */
+    val isOverlayShowing: Boolean
+        get() = overlayView != null
+
     fun showOverlay() {
         if (!Settings.canDrawOverlays(context) || overlayView != null) return
 
@@ -164,27 +182,14 @@ class DmsOverlayManager(private val context: Context) {
                 MotionEventType.NORMAL -> "DMS Active"
             }
 
-            val (bgColor, strokeColor, dotColor) = when (state.alertLevel) {
-                AlertLevel.CRITICAL_DROWSY, AlertLevel.CRITICAL_DISTRACTED, AlertLevel.CRITICAL_CRASH -> {
-                    Triple("#E53935".toColorInt(), "#FFCDD2".toColorInt(), "#FF1744".toColorInt())
-                }
-                AlertLevel.WARNING_DROWSY, AlertLevel.WARNING_DISTRACTED,
-                AlertLevel.HARSH_BRAKING, AlertLevel.HARSH_ACCELERATION -> {
-                    Triple("#FB8C00".toColorInt(), "#FFE0B2".toColorInt(), "#FF9100".toColorInt())
-                }
-                AlertLevel.NORMAL -> {
-                    Triple("#2E7D32".toColorInt(), "#A5D6A7".toColorInt(), "#00E676".toColorInt())
-                }
-                AlertLevel.FACE_NOT_DETECTED -> {
-                    Triple("#424242".toColorInt(), "#9E9E9E".toColorInt(), "#757575".toColorInt())
-                }
-            }
+            val visuals = resolveVisuals(state.alertLevel)
 
-            badgeDot?.background = createCircleDrawable(dotColor)
+            badgeDot?.background = createCircleDrawable(visuals.dotColor)
+            statusIcon?.setImageResource(visuals.iconRes)
 
             if (state.alertLevel != currentAlertLevel) {
                 currentAlertLevel = state.alertLevel
-                handleAlertAnimation(state.alertLevel, bgColor, strokeColor)
+                handleAlertAnimation(state.alertLevel, visuals.backgroundColor, visuals.strokeColor)
             }
         }
     }
@@ -260,4 +265,72 @@ class DmsOverlayManager(private val context: Context) {
             overlayView = null
         }
     }
+
+    companion object {
+        /**
+         * Resolves the primary background color, border stroke color, dot indicator color,
+         * and drawable resource identifier corresponding to an [AlertLevel].
+         *
+         * @param level The current alertness classification level.
+         * @return [OverlayVisuals] containing color definitions and icon resource identifier.
+         */
+        fun resolveVisuals(level: AlertLevel): OverlayVisuals {
+            return when (level) {
+                AlertLevel.CRITICAL_DROWSY, AlertLevel.CRITICAL_DISTRACTED, AlertLevel.CRITICAL_CRASH -> {
+                    OverlayVisuals(
+                        backgroundColor = 0xFFE53935.toInt(),
+                        strokeColor = 0xFFFFCDD2.toInt(),
+                        dotColor = 0xFFFF1744.toInt(),
+                        iconRes = android.R.drawable.stat_notify_error,
+                        isCritical = true
+                    )
+                }
+                AlertLevel.WARNING_DROWSY, AlertLevel.WARNING_DISTRACTED,
+                AlertLevel.HARSH_BRAKING, AlertLevel.HARSH_ACCELERATION -> {
+                    OverlayVisuals(
+                        backgroundColor = 0xFFFB8C00.toInt(),
+                        strokeColor = 0xFFFFE0B2.toInt(),
+                        dotColor = 0xFFFF9100.toInt(),
+                        iconRes = android.R.drawable.stat_notify_sync,
+                        isCritical = false
+                    )
+                }
+                AlertLevel.NORMAL -> {
+                    OverlayVisuals(
+                        backgroundColor = 0xFF2E7D32.toInt(),
+                        strokeColor = 0xFFA5D6A7.toInt(),
+                        dotColor = 0xFF00E676.toInt(),
+                        iconRes = R.drawable.ic_dms_eye,
+                        isCritical = false
+                    )
+                }
+                AlertLevel.FACE_NOT_DETECTED -> {
+                    OverlayVisuals(
+                        backgroundColor = 0xFF424242.toInt(),
+                        strokeColor = 0xFF9E9E9E.toInt(),
+                        dotColor = 0xFF757575.toInt(),
+                        iconRes = R.drawable.ic_dms_eye,
+                        isCritical = false
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Immutable visual styling properties for the floating DMS overlay bubble.
+     *
+     * @property backgroundColor Base fill color of the bubble container.
+     * @property strokeColor Border stroke highlight color.
+     * @property dotColor Status indicator badge dot color.
+     * @property iconRes Status emblem drawable resource identifier.
+     * @property isCritical Whether the alert represents a critical driver warning.
+     */
+    data class OverlayVisuals(
+        val backgroundColor: Int,
+        val strokeColor: Int,
+        val dotColor: Int,
+        val iconRes: Int,
+        val isCritical: Boolean
+    )
 }
